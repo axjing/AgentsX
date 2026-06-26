@@ -181,11 +181,13 @@ def create_provider(
 ) -> Provider:
     """Factory: create a Provider instance from a model name.
 
-    The model name is matched against registered providers by prefix.
-    ``"gpt-4o"`` → ``"openai"``, ``"claude-sonnet-4"`` → ``"anthropic"``.
+    Model name resolution (in order of priority):
+        1. Slash notation: ``"gemini/gemini-2.0-flash"`` -> ``gemini``
+        2. Explicit mapping: ``"deepseek-chat"`` -> ``deepseek``
+        3. Prefix matching: ``"gpt-4o"`` -> ``openai``
 
     Args:
-        model_name: Model identifier (e.g. ``"gpt-4o"``).
+        model_name: Model identifier (e.g. ``"gpt-4o"`` or ``"gemini/gemini-2.0-flash"``).
         api_key: API key for the provider.
         api_base: Optional custom API base URL.
         **kwargs: Additional provider-specific arguments.
@@ -196,11 +198,24 @@ def create_provider(
     Raises:
         ProviderError: If no provider is registered for the model.
     """
-    for _mod in ("agentsx.provider.openai", "agentsx.provider.anthropic"):
+    # Load all provider modules
+    for _mod in (
+        "agentsx.provider.openai",
+        "agentsx.provider.anthropic",
+        "agentsx.provider.generic",
+    ):
         try:
             importlib.import_module(_mod)
         except ImportError:
             pass
+
+    # Extract clean model ID (remove provider prefix if slash notation)
+    if "/" in model_name:
+        provider_hint = model_name.split("/")[0]
+        clean_model = model_name.split("/", 1)[1]
+    else:
+        provider_hint = None
+        clean_model = model_name
 
     init_kwargs: dict[str, object] = {}
     if api_key is not None:
@@ -209,13 +224,33 @@ def create_provider(
         init_kwargs["api_base"] = api_base
     init_kwargs.update(kwargs)
 
+    # Try explicit provider hint first
+    if provider_hint and provider_hint in _PROVIDER_REGISTRY:
+        resolved_kwargs = _resolve_provider_kwargs(provider_hint, init_kwargs)
+        return _PROVIDER_REGISTRY[provider_hint](
+            model=Model(id=clean_model, provider_name=provider_hint),
+            **resolved_kwargs,
+        )
+
+    # Try explicit mapping
+    resolved = _resolve_provider_name(model_name)
+    if resolved and resolved in _PROVIDER_REGISTRY:
+        resolved_kwargs = _resolve_provider_kwargs(resolved, init_kwargs)
+        return _PROVIDER_REGISTRY[resolved](
+            model=Model(id=clean_model, provider_name=resolved),
+            **resolved_kwargs,
+        )
+
+    # Try prefix matching
     for name, cls in _PROVIDER_REGISTRY.items():
-        if model_name.startswith(_provider_prefix(name)):
+        prefix = _provider_prefix(name)
+        if prefix and model_name.startswith(prefix):
             resolved_kwargs = _resolve_provider_kwargs(name, init_kwargs)
             return cls(
-                model=Model(id=model_name, provider_name=name),
+                model=Model(id=clean_model, provider_name=name),
                 **resolved_kwargs,
             )
+
     msg = f"No provider registered for model: {model_name}"
     raise ProviderError(msg)
 
