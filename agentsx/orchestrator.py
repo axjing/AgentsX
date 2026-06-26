@@ -84,19 +84,19 @@ class Orchestrator:
             )
             raise RuntimeError(msg)
 
-        if current_depth >= self._max_spawn_depth:
+        if config.current_depth >= self._max_spawn_depth:
             msg = (
                 f"Maximum spawn depth ({self._max_spawn_depth}) reached. "
                 "Cannot spawn nested sub-agents beyond this depth."
             )
             raise RuntimeError(msg)
 
-        runtime = SubAgentRuntime(config, spawn_depth=current_depth)
+        runtime = SubAgentRuntime(config, spawn_depth=config.current_depth)
         record = SubAgentRecord(
             runtime=runtime,
             spawned_at=time.time(),
             prompt=prompt,
-            depth=current_depth,
+            depth=config.current_depth,
         )
         self._agents[runtime.id] = record
 

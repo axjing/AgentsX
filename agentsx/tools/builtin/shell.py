@@ -2,14 +2,51 @@
 
 from __future__ import annotations
 
+import asyncio
 import subprocess
 
 from agentsx.config import get_settings
 from agentsx.tools import tool
 
 
+async def _run_command(
+    command: str,
+    timeout: int,
+) -> subprocess.CompletedProcess[str]:
+    """Run a shell command without blocking the event loop.
+
+    Uses `asyncio.create_subprocess_shell` to keep the event loop
+    responsive while the subprocess runs.
+    """
+    proc = await asyncio.create_subprocess_shell(
+        command,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    try:
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+    except asyncio.TimeoutError:
+        try:
+            proc.kill()
+        except ProcessLookupError:
+            pass
+        return subprocess.CompletedProcess(
+            args=command,
+            returncode=-1,
+            stdout="",
+            stderr=f"command timed out after {timeout}s",
+        )
+
+    return subprocess.CompletedProcess(
+        args=command,
+        returncode=proc.returncode or 0,
+        stdout=stdout.decode(errors="replace"),
+        stderr=stderr.decode(errors="replace"),
+    )
+
+
 @tool(description="Execute a shell command and return its output.")
-def tool_bash(
+async def tool_bash(
     command: str,
     description: str = "",
     timeout: int = 120,
@@ -27,16 +64,8 @@ def tool_bash(
     if timeout == 120:
         settings = get_settings()
         timeout = settings.tool_timeout
-    try:
-        result = subprocess.run(
-            command,
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
-    except subprocess.TimeoutExpired:
-        return f"Error: command timed out after {timeout}s"
+
+    result = await _run_command(command, timeout)
 
     output = result.stdout
     if result.stderr:

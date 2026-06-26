@@ -8,6 +8,8 @@ Design:
     - Simple token-count based compaction (no LLM call needed)
     - Preserves: system message + last N messages + all tool calls
     - Compacted older messages become a single summary placeholder
+    - Summary is a USER-role message to stay provider-compatible
+      (Anthropic requires user as first message, single system only)
 """
 
 from __future__ import annotations
@@ -109,7 +111,7 @@ def compact_messages(
 
     # Create summary placeholder
     summary = AgentMessage(
-        role=MessageRole.SYSTEM,
+        role=MessageRole.USER,
         content=(
             f"[{compacted_count} earlier messages compacted "
             f"(~{compacted_tokens} tokens omitted)]"

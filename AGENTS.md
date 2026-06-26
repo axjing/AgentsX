@@ -114,7 +114,22 @@ uv run python -m pytest -v
 - No bare `except:`. Always catch explicit exception types.
 - Use `with` context manager for all resource operations.
 
-### 5.8 Project-Specific Conventions
+### 5.8 Python Development Best Practices
+
+#### Ignore Python 2 compatibility
+
+This project uses Python 3+. You should not use the `__future__` module.
+
+If you need to worry about feature compatibility between different 3.xx point releases, check the
+closest `pyproject.toml`'s `requires-python` field to see what minimum runtime version is supported.
+
+### 5.9 Platform Support
+
+Tests and features must support Linux, macOS and Windows unless feature is explicitly OS-specific.
+
+This project supports running connected app-server and exec-server on different operating systems. See the `$remote-tests` skill for details about integration testing these configurations.
+
+### 5.10 Project-Specific Conventions
 - **Provider pattern**: Subclass `Provider` ABC; register via `register_provider()`, create via `create_provider()`. Each provider takes a `Model(id, provider_name, max_tokens)` dataclass.
 - **Agent loop**: `run_agent_loop()` is a pure async generator implementing the ReAct pattern (think → act → observe → repeat). It accepts `provider`, `messages`, `max_steps`, optional `tools` (ToolRegistry), optional `policy` (ExecutionPolicy), and optional `extensions` (ExtensionAPI). Yields `AgentEvent` items.
 - **Tool system**: Define tools with the `@tool()` decorator, which auto-generates a JSON Schema. Register in `ToolRegistry`. Built-in tools live in `agentsx/tools/builtin/`.
@@ -123,6 +138,8 @@ uv run python -m pytest -v
 - **Extensions**: `ExtensionAPI` observer-only pattern. `on()` registers handlers, `emit()` fires events (exception-isolated). 7 predefined events. Auto-discovery via `entry_points(group="agentsx.extensions")`.
 - **Config**: All config via `AGENTSX_*` environment variables in `agentsx/config.py` (Pydantic Settings).
 - **Async**: All I/O-bound functions use `async def`. CLI uses `asyncio.run()`.
+
+
 
 ---
 

@@ -42,6 +42,7 @@ async def spawn_agent(
     max_steps: int = 10,
     timeout: int = 120,
     max_spawn_depth: int = 2,
+    current_depth: int = 0,
 ) -> str:
     """Spawn a sub-agent with its own context and tool set.
 
@@ -55,6 +56,7 @@ async def spawn_agent(
         max_steps: Max tool-calling iterations (default 10).
         timeout: Max wall-clock seconds (default 120).
         max_spawn_depth: Maximum depth for recursive spawning (default 2).
+        current_depth: Current recursion depth (default 0, auto-incremented).
 
     Returns:
         The sub-agent's final response as text.
@@ -69,6 +71,7 @@ async def spawn_agent(
         max_steps=max_steps,
         timeout=timeout,
         max_spawn_depth=max_spawn_depth,
+        current_depth=current_depth + 1,
     )
 
     orchestra = _get_orchestra()

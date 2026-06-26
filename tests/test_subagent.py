@@ -14,7 +14,7 @@ from agentsx.agent.subagent import (
     SubAgentRuntime,
     _build_subagent_tools,
 )
-from agentsx.core.types import MessageRole
+from agentsx.core.types import AgentMessage, MessageRole
 from agentsx.orchestrator import Orchestrator, SubAgentRecord
 
 
@@ -80,19 +80,31 @@ class TestSubAgentRuntime:
 
         patcher = patch.object(subagent_mod, "create_provider")
         mock_factory = patcher.start()
-        mock_provider = AsyncMock()
-        mock_provider.model.id = "gpt-4o"
-        mock_provider.model.provider_name = "openai"
+        from agentsx.core.types import StreamEvent, TextStreamEvent
+        from agentsx.provider import Model, Provider
 
-        async def mock_stream(
-            _messages: list[object],
-        ) -> AsyncIterator[object]:
-            from agentsx.core.types import TextStreamEvent
+        class _MockProvider(Provider):
+            def __init__(self) -> None:
+                self.model = Model(
+                    id="gpt-4o",
+                    provider_name="openai",
+                    max_tokens=4096,
+                )
+                self.tools = None
 
-            yield TextStreamEvent(text="mock")
+            async def stream(
+                self,
+                messages: list[AgentMessage],
+            ) -> AsyncIterator[StreamEvent]:
+                yield TextStreamEvent(text="mock")
 
-        mock_provider.stream = mock_stream
-        mock_provider.format_messages.return_value = []
+            def format_messages(
+                self,
+                messages: list[AgentMessage],
+            ) -> list[dict[str, object]]:
+                return []
+
+        mock_provider = _MockProvider()
         mock_factory.return_value = mock_provider
         yield
         patcher.stop()
@@ -191,19 +203,31 @@ class TestOrchestrator:
         self,
         mock_factory: object,
     ) -> None:
-        mock_provider = AsyncMock()
-        mock_provider.model.id = "gpt-4o"
+        from agentsx.core.types import StreamEvent, TextStreamEvent
+        from agentsx.provider import Model, Provider
 
-        async def mock_stream(
-            _messages: list[object],
-        ) -> AsyncIterator[object]:
-            from agentsx.core.types import TextStreamEvent
+        class _MockProvider2(Provider):
+            def __init__(self) -> None:
+                self.model = Model(
+                    id="gpt-4o",
+                    provider_name="openai",
+                    max_tokens=4096,
+                )
+                self.tools = None
 
-            yield TextStreamEvent(text="mock")
+            async def stream(
+                self,
+                messages: list[AgentMessage],
+            ) -> AsyncIterator[StreamEvent]:
+                yield TextStreamEvent(text="mock")
 
-        mock_provider.stream = mock_stream
-        mock_provider.format_messages.return_value = []
-        mock_factory.return_value = mock_provider  # type: ignore[union-attr]
+            def format_messages(
+                self,
+                messages: list[AgentMessage],
+            ) -> list[dict[str, object]]:
+                return []
+
+        mock_factory.return_value = _MockProvider2()
 
         config = SubAgentConfig(model_name="gpt-4o")
         runtime = SubAgentRuntime(config)

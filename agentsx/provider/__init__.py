@@ -211,9 +211,35 @@ def create_provider(
 
     for name, cls in _PROVIDER_REGISTRY.items():
         if model_name.startswith(_provider_prefix(name)):
-            return cls(model=Model(id=model_name, provider_name=name), **init_kwargs)
+            resolved_kwargs = _resolve_provider_kwargs(name, init_kwargs)
+            return cls(
+                model=Model(id=model_name, provider_name=name),
+                **resolved_kwargs,
+            )
     msg = f"No provider registered for model: {model_name}"
     raise ProviderError(msg)
+
+
+def _resolve_provider_kwargs(
+    provider_name: str,
+    init_kwargs: dict[str, object],
+) -> dict[str, object]:
+    """Apply generic api_key/api_base fallback for a provider.
+
+    When no provider-specific key is configured, the generic
+    `api_key` and `api_base` settings are used as fallback.
+    """
+    settings = get_settings()
+    resolved = dict(init_kwargs)
+    if not resolved.get("api_key"):
+        key_attr = f"{provider_name}_api_key"
+        generic_key = getattr(settings, key_attr, "") or settings.api_key
+        resolved["api_key"] = generic_key
+    if not resolved.get("api_base"):
+        base_attr = f"{provider_name}_api_base"
+        generic_base = getattr(settings, base_attr, "") or settings.api_base
+        resolved["api_base"] = generic_base
+    return resolved
 
 
 def _provider_prefix(provider_name: str) -> str:

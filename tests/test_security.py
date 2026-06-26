@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock
+from collections.abc import AsyncIterator
 
 import pytest
 
@@ -11,23 +11,29 @@ from agentsx.core.types import (
     AgentMessage,
     Decision,
     MessageRole,
+    StreamEvent,
     ToolCall,
     ToolCallStreamEvent,
     ToolExecutionEvent,
 )
-from agentsx.provider import Model
+from agentsx.provider import Model, Provider
 from agentsx.security import ExecutionPolicy, Rule
 from agentsx.tools import ToolRegistry, ToolSpec
 
 # ── Helpers ─────────────────────────────────────────────────
 
 
-def _mock_provider_with_tool_call() -> AsyncMock:
+class _MockProvider(Provider):
     """Build a mock provider that yields a single ``bash`` tool call."""
-    provider = AsyncMock()
-    provider.model = Model(id="test", provider_name="test", max_tokens=256)
 
-    async def stream(messages: list[AgentMessage]):
+    def __init__(self) -> None:
+        self.model = Model(id="test", provider_name="test", max_tokens=256)
+        self.tools: object = None
+
+    async def stream(
+        self,
+        messages: list[AgentMessage],
+    ) -> AsyncIterator[StreamEvent]:
         yield ToolCallStreamEvent(
             tool_call=ToolCall(
                 id="tc1",
@@ -36,8 +42,42 @@ def _mock_provider_with_tool_call() -> AsyncMock:
             ),
         )
 
-    provider.stream = stream
-    return provider
+    def format_messages(
+        self,
+        messages: list[AgentMessage],
+    ) -> list[dict[str, object]]:
+        return [{"role": m.role.value, "content": m.content} for m in messages]
+
+
+class _MockProvider(Provider):
+    """Test provider that yields a single bash tool call."""
+
+    def __init__(self) -> None:
+        self.model = Model(id="test", provider_name="test", max_tokens=256)
+        self.tools: object = None
+
+    async def stream(
+        self,
+        messages: list[AgentMessage],
+    ) -> AsyncIterator[StreamEvent]:
+        yield ToolCallStreamEvent(
+            tool_call=ToolCall(
+                id="tc1",
+                name="bash",
+                arguments={"command": "echo hi"},
+            ),
+        )
+
+    def format_messages(
+        self,
+        messages: list[AgentMessage],
+    ) -> list[dict[str, object]]:
+        return [{"role": m.role.value, "content": m.content} for m in messages]
+
+
+def _mock_provider_with_tool_call() -> _MockProvider:
+    """Build a mock provider that yields a single `bash` tool call."""
+    return _MockProvider()
 
 
 def _bash_tool_registry() -> ToolRegistry:
@@ -113,18 +153,25 @@ class TestExecutionPolicy:
 
     def test_default_factory_allows_reads(self) -> None:
         policy = ExecutionPolicy.default()
-        assert policy.evaluate("read", {"path": "/tmp/a.txt"}) == Decision.ALLOW
-        assert policy.evaluate("glob", {"pattern": "*.py"}) == Decision.ALLOW
-        assert policy.evaluate("grep", {"pattern": "foo"}) == Decision.ALLOW
+        assert (
+            policy.evaluate("tool_file_read", {"path": "/tmp/a.txt"}) == Decision.ALLOW
+        )
+        assert policy.evaluate("tool_file_glob", {"pattern": "*.py"}) == Decision.ALLOW
+        assert policy.evaluate("tool_file_grep", {"pattern": "foo"}) == Decision.ALLOW
         url = "https://example.com"
-        assert policy.evaluate("web_fetch", {"url": url}) == Decision.ALLOW
-        assert policy.evaluate("web_search", {"query": "test"}) == Decision.ALLOW
+        assert policy.evaluate("tool_web_fetch", {"url": url}) == Decision.ALLOW
+        assert policy.evaluate("tool_web_search", {"query": "test"}) == Decision.ALLOW
 
     def test_default_factory_prompts_mutations(self) -> None:
         policy = ExecutionPolicy.default()
-        assert policy.evaluate("write", {"path": "/tmp/x.txt"}) == Decision.PROMPT
-        assert policy.evaluate("edit", {"path": "/tmp/x.txt"}) == Decision.PROMPT
-        assert policy.evaluate("bash", {"command": "ls"}) == Decision.PROMPT
+        assert (
+            policy.evaluate("tool_file_write", {"path": "/tmp/x.txt"})
+            == Decision.PROMPT
+        )
+        assert (
+            policy.evaluate("tool_file_edit", {"path": "/tmp/x.txt"}) == Decision.PROMPT
+        )
+        assert policy.evaluate("tool_bash", {"command": "ls"}) == Decision.PROMPT
 
     def test_default_factory_unknown_is_prompt(self) -> None:
         policy = ExecutionPolicy.default()

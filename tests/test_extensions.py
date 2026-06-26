@@ -182,6 +182,7 @@ class TestExtensionIntegration:
             )
 
         provider.stream = stream
+        provider.stream_with_retry = stream
 
         tools = AsyncMock()
         tools.call.return_value = "executed!"
@@ -228,6 +229,13 @@ class TestExtensionIntegration:
         provider.stream.return_value = AsyncMock()
         provider.stream.return_value.__aiter__.return_value = iter([])
 
+        async def empty_stream(messages):
+            return
+            yield
+
+        provider.stream = empty_stream
+        provider.stream_with_retry = empty_stream
+
         messages = [AgentMessage(role=MessageRole.USER, content="hello")]
 
         async for _ in run_agent_loop(provider, messages, max_steps=1):
@@ -252,6 +260,7 @@ class TestExtensionIntegration:
             raise RuntimeError("stream crashed")
 
         provider.stream = stream
+        provider.stream_with_retry = stream
 
         ext_api = ExtensionAPI()
         fired: list[str] = []

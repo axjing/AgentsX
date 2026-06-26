@@ -65,6 +65,7 @@ class SessionStore:
         self.base_dir.mkdir(parents=True, exist_ok=True)
         self._cache_size = cache_size
         self._message_cache: dict[str, list[AgentMessage]] = {}
+        self._pending_timestamps: dict[str, str] = {}
 
     # ── Public API ─────────────────────────────────────────────────────
 
@@ -236,6 +237,9 @@ class SessionStore:
         return self.base_dir / session_id
 
     def _write_meta(self, session: Session) -> None:
+        # Flush any pending timestamps for this session before overwriting meta
+        self._pending_timestamps.pop(session.id, None)
+        self._flush_timestamps()
         data: dict[str, object] = {
             "id": session.id,
             "created_at": session.created_at.isoformat(),
@@ -248,15 +252,29 @@ class SessionStore:
             json.dump(data, f, indent=2)
 
     def _update_timestamp(self, session_id: str) -> None:
-        # Directly write timestamp without read-then-write race
-        meta_path = self._session_dir(session_id) / "meta.json"
-        if not meta_path.is_file():
-            return
-        with open(meta_path, encoding="utf-8") as f:
-            data = json.load(f)
-        data["updated_at"] = datetime.now(timezone.utc).isoformat()
-        with open(meta_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
+        """Defer timestamp update to avoid read-modify-write race.
+
+        The timestamp is stored in memory and flushed to disk when
+        another write (_write_meta or _flush_timestamps) occurs.
+        """
+        self._pending_timestamps[session_id] = datetime.now(timezone.utc).isoformat()
+
+    def _flush_timestamps(self) -> None:
+        """Write all pending timestamps to meta.json files.
+
+        Each file is read-once, updated, and written atomically
+        to avoid the previous read-modify-write race.
+        """
+        for sid, ts in self._pending_timestamps.items():
+            meta_path = self._session_dir(sid) / "meta.json"
+            if not meta_path.is_file():
+                continue
+            with open(meta_path, encoding="utf-8") as f:
+                data = json.load(f)
+            data["updated_at"] = ts
+            with open(meta_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+        self._pending_timestamps.clear()
 
     def _evict_cache(self) -> None:
         """Remove oldest cached sessions if cache is full."""

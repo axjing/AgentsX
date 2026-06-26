@@ -1,4 +1,4 @@
-"""High-level ``Agent`` class wrapping the loop for convenient use."""
+"""High-level `Agent` class wrapping the loop for convenient use."""
 
 from __future__ import annotations
 
@@ -14,13 +14,19 @@ from agentsx.tools import ToolRegistry
 
 
 class Agent:
-    """Convenience wrapper around ``run_agent_loop()``.
+    """Convenience wrapper around `run_agent_loop()`.
+
+    Maintains an internal message history so that multiple `run()`
+    calls share the same conversation context.
 
     Usage::
 
         agent = Agent(model_name="gpt-4o")
         async for event in agent.run("Hello!"):
             print(event)
+
+        async for event in agent.run("What did I just ask?"):
+            print(event)  # Agent remembers the first turn.
     """
 
     def __init__(
@@ -38,6 +44,24 @@ class Agent:
         self._tools = tools
         self._policy = policy
         self._extensions = extensions
+        self._messages: list[AgentMessage] = []
+
+    # ── Public API ──────────────────────────────────────────────────
+
+    @property
+    def messages(self) -> list[AgentMessage]:
+        """Read-only access to the current conversation history."""
+        return list(self._messages)
+
+    def clear_history(self) -> None:
+        """Clear the conversation history, keeping the system message."""
+        has_system = bool(
+            self._messages and self._messages[0].role == MessageRole.SYSTEM,
+        )
+        system = self._messages[0] if has_system else None
+        self._messages.clear()
+        if system:
+            self._messages.append(system)
 
     async def run(
         self,
@@ -53,13 +77,18 @@ class Agent:
             timeout: Wall-clock timeout in seconds (0 = disabled).
 
         Yields:
-            ``AgentEvent`` items from the agent loop.
+            `AgentEvent` items from the agent loop.
         """
+        if not self._messages:
+            self._messages = self._build_messages()
+        self._messages.append(
+            AgentMessage(role=MessageRole.USER, content=user_input),
+        )
+
         provider = self._resolve_provider()
-        messages = self._build_messages(user_input)
         async for event in run_agent_loop(
             provider,
-            messages,
+            self._messages,
             max_steps,
             tools=self._tools,
             policy=self._policy,
@@ -68,7 +97,7 @@ class Agent:
         ):
             yield event
 
-    # ── Internals ──────────────────────────────────────────────────
+    # ── Internals ─────────────────────────────────────────────────────────────────
 
     def _resolve_provider(self) -> Provider:
         if self._provider is not None:
@@ -78,7 +107,7 @@ class Agent:
             model_name=self._model_name or settings.model_name,
         )
 
-    def _build_messages(self, user_input: str) -> list[AgentMessage]:
+    def _build_messages(self) -> list[AgentMessage]:
         messages: list[AgentMessage] = []
         prompt = self._system_prompt
         if prompt is None:
@@ -87,7 +116,4 @@ class Agent:
             messages.append(
                 AgentMessage(role=MessageRole.SYSTEM, content=prompt),
             )
-        messages.append(
-            AgentMessage(role=MessageRole.USER, content=user_input),
-        )
         return messages

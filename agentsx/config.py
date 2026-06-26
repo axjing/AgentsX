@@ -30,11 +30,11 @@ class AgentsXSettings(BaseSettings):
     model_name: str = "gpt-4o"
     """Default LLM model identifier."""
 
-    api_key: str = "sk-5PQREuaqS3g8ybOdfVC5xJE223OMVKDBWbg1nx2pT6LtxWNc"
-    """Default API key for the LLM provider."""
+    api_key: str = ""
+    """Default API key for the LLM provider. Must be set via AGENTSX_API_KEY."""
 
-    api_base: str = "https://lonlie.plus7.plus/v1"
-    """Optional custom API base URL."""
+    api_base: str = ""
+    """Optional custom API base URL. Must be set via AGENTSX_API_BASE."""
 
     # ── Agent ──
     max_steps: int = 25
@@ -78,6 +78,9 @@ class AgentsXSettings(BaseSettings):
 
     loop_timeout: float = 0
     """Wall-clock timeout for the entire agent loop (0 = disabled)."""
+
+    max_tool_output: int = 50000
+    """Maximum characters returned by a single tool call (0 = no limit)."""
 
 
 settings = AgentsXSettings()

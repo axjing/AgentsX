@@ -75,6 +75,9 @@ class SubAgentConfig:
     max_spawn_depth: int = 2
     """Maximum depth for recursive sub-agent spawning."""
 
+    current_depth: int = 0
+    """Current recursion depth (used for depth-limit enforcement)."""
+
 
 class SubAgentRuntime:
     """Isolated ReAct agent runtime.

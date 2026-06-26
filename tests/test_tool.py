@@ -3,12 +3,9 @@ import asyncio
 from agentsx.agent.loop import run_agent_loop
 from agentsx.core.types import (
     AgentMessage,
-    MessageRole,
-    ModelRequestEvent,
-    ModelResponseEvent,
-    ToolExecutionEvent,
-    PromptEvent,
     ErrorEvent,
+    MessageRole,
+    ModelResponseEvent,
 )
 from agentsx.provider import create_provider
 from agentsx.security import ExecutionPolicy

@@ -48,7 +48,11 @@ class TestRegistry:
 
     def _register_dummy(self) -> None:
         class DummyProvider(Provider):
-            def __init__(self, model: Model) -> None:
+            def __init__(
+                self,
+                model: Model,
+                **kwargs: object,  # noqa: ARG002
+            ) -> None:
                 self.model = model
 
             async def stream(

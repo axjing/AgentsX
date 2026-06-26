@@ -87,10 +87,25 @@ def chat(
         "--timeout",
         help="Wall-clock timeout for agent loop (seconds, 0=disabled)",
     ),
+    workspace: str = typer.Option(
+        "",
+        "--workspace",
+        "-w",
+        help="Restrict file tools to this directory",
+    ),
 ) -> None:
     """Start an interactive chat session with an AI agent."""
     asyncio.run(
-        _async_chat(model, system, no_tools, max_steps, allow_all, session, timeout),
+        _async_chat(
+            model,
+            system,
+            no_tools,
+            max_steps,
+            allow_all,
+            session,
+            timeout,
+            workspace,
+        ),
     )
 
 
@@ -199,6 +214,7 @@ async def _async_chat(
     allow_all: bool = False,
     session_id: str = "",
     timeout: float = 0,
+    workspace: str = "",
 ) -> None:
     settings = get_settings()
 
@@ -243,6 +259,11 @@ async def _async_chat(
     # ── Security policy ──────────────────────────────────────────────
     if allow_all:
         policy = ExecutionPolicy(default_decision=Decision.ALLOW)
+    elif workspace:
+        from pathlib import Path  # noqa: PLC0415
+
+        policy = ExecutionPolicy.default()
+        policy._allowed_dirs = [Path(workspace).resolve()]
     else:
         policy = ExecutionPolicy.default()
 
@@ -280,7 +301,15 @@ async def _async_chat(
         if not user_input:
             continue
         if user_input.startswith("/"):
-            new_id = _handle_command(user_input, messages, store, sess.id)
+            new_id, new_model = _handle_command(
+                user_input,
+                messages,
+                store,
+                sess.id,
+                shown_model,
+            )
+            if new_model:
+                shown_model = new_model
             if new_id is not None and new_id != sess.id:
                 # Session switch: reload messages
                 sess = store.get(new_id)
@@ -366,7 +395,20 @@ def _handle_command(
     messages: list[AgentMessage],
     store: SessionStore | None = None,
     session_id: str = "",
-) -> str | None:
+    model_name: str = "unknown",
+) -> tuple[str | None, str]:
+    """Process a slash command typed by the user.
+
+    Args:
+        cmd: The raw command line.
+        messages: Current conversation messages (modified in-place for /clear).
+        store: SessionStore instance (required for session commands).
+        session_id: Current session ID.
+        model_name: Current model name (passed to /new for correct session metadata).
+
+    Returns:
+        (new_session_id, new_model_name) or (None, current_model).
+    """
     """Process a slash command typed by the user.
 
     Args:
@@ -386,55 +428,60 @@ def _handle_command(
 
     if command == "/help":
         console.print(commands.cmd_help())
-        return None
+        return None, model_name
 
     if command == "/clear":
         messages.clear()
         console.print("[dim]History cleared.[/dim]")
-        return None
+        return None, model_name
 
     # ── Session commands ─────────────────────────────────────────────
     if store is None:
         console.print("[yellow]Session store not available.[/yellow]")
-        return None
+        return None, model_name
 
     if command == "/sessions":
         msg, _ = commands.cmd_sessions(store, session_id)
         console.print(msg)
-        return None
+        return None, model_name
 
     if command == "/session" and len(parts) >= 3 and parts[1] == "show":
         msg, _ = commands.cmd_session_show(store, session_id, parts[2])
         console.print(msg)
-        return None
+        return None, model_name
 
     if command == "/session" and len(parts) >= 3 and parts[1] == "switch":
         msg, new_id = commands.cmd_session_switch(store, session_id, parts[2])
         console.print(msg)
-        return new_id
+        return new_id, model_name
 
     if command == "/new":
         title = " ".join(parts[1:]) if len(parts) > 1 else ""
-        msg, new_id = commands.cmd_new(store, session_id, title)
+        msg, new_id = commands.cmd_new(
+            store,
+            session_id,
+            title,
+            model_name=model_name,
+        )
         console.print(msg)
-        return new_id
+        return new_id, model_name
 
     if command == "/delete" and len(parts) >= 2:
         msg, _ = commands.cmd_delete(store, session_id, parts[1])
         console.print(msg)
-        return None
+        return None, model_name
 
     if command == "/branch" and len(parts) >= 2:
         title = " ".join(parts[2:]) if len(parts) > 2 else ""
         msg, new_id = commands.cmd_branch(store, session_id, parts[1], title)
         console.print(msg)
-        return new_id
+        return new_id, model_name
 
     if command == "/title" and len(parts) >= 2:
         title = " ".join(parts[1:])
         msg, _ = commands.cmd_title(store, session_id, title)
         console.print(msg)
-        return None
+        return None, model_name
 
     console.print(f"[yellow]Unknown command: {command}.  Try /help[/yellow]")
-    return None
+    return None, model_name

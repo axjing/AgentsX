@@ -44,7 +44,7 @@ class AnthropicProvider(Provider):
         messages: list[AgentMessage],
     ) -> AsyncIterator[StreamEvent]:
         settings = get_settings()
-        api_key = self._api_key or settings.anthropic_api_key
+        api_key = self._api_key or settings.anthropic_api_key or settings.api_key
         api_base = (
             self._api_base
             or settings.anthropic_api_base

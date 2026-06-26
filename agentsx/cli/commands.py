@@ -84,10 +84,11 @@ def cmd_new(
     store: SessionStore,
     _current_id: str,
     title: str = "",
+    model_name: str = "unknown",
 ) -> tuple[str, str]:
     """Create a new session and switch to it."""
     session = store.create(
-        model_name="unknown",
+        model_name=model_name,
         title=title or "",
     )
     return f"Created new session {session.id[:12]}", session.id

@@ -94,8 +94,8 @@ async def run_agent_loop(
         (delta + final), ``ToolExecutionEvent``, ``ErrorEvent``,
         ``CompactionEvent``, and ``PromptEvent``.
     """
+    settings = get_settings()
     if max_steps is None:
-        settings = get_settings()
         max_steps = settings.max_steps
 
     step = 0
@@ -257,9 +257,17 @@ async def run_agent_loop(
                     )
                     error_flag = True
                 else:  # ALLOW
-                    result_text, error_flag = await _execute_tool_with_status(tc, tools)
+                    result_text, error_flag = await _execute_tool_with_status(
+                        tc,
+                        tools,
+                        settings.max_tool_output,
+                    )
             else:
-                result_text, error_flag = await _execute_tool_with_status(tc, tools)
+                result_text, error_flag = await _execute_tool_with_status(
+                    tc,
+                    tools,
+                    settings.max_tool_output,
+                )
 
             tool_elapsed = time.monotonic() - tool_start
             logger.debug(
@@ -320,10 +328,20 @@ async def run_agent_loop(
 async def _execute_tool_with_status(
     tc: ToolCall,
     tools: ToolRegistry,
+    max_output: int = 0,
 ) -> tuple[str, bool]:
-    """Execute a single tool call and return (result_text, is_error)."""
+    """Execute a single tool call and return (result_text, is_error).
+
+    Args:
+        tc: The tool call to execute.
+        tools: The tool registry.
+        max_output: Maximum characters to keep (0 = no limit).
+    """
     try:
         result = await tools.call(tc.name, **tc.arguments)
+        if max_output > 0 and len(result) > max_output:
+            truncated = result[:max_output]
+            result = f"{truncated}\n... (output truncated at {max_output} chars)"
         return result, False
     except Exception as exc:  # noqa: BLE001
         return str(exc), True
