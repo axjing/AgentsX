@@ -99,7 +99,19 @@ def chat(
         "-i",
         help="Image path(s) to include in the first message",
     ),
-) -> None:
+    audio: list[str] = typer.Option(
+        [],
+        "--audio",
+        "-a",
+        help="Audio file path(s) to include in the first message",
+    ),
+    video: list[str] = typer.Option(
+        [],
+        "--video",
+        "-v",
+        help="Video file path(s) to include in the first message",
+    ),
+) -> None:  # noqa: B008
     """Start an interactive chat session with an AI agent."""
     asyncio.run(
         _async_chat(
@@ -144,7 +156,7 @@ def run(
         "--timeout",
         help="Wall-clock timeout for agent loop (seconds, 0=disabled)",
     ),
-) -> None:
+) -> None:  # noqa: B008
     """Execute a single prompt and exit.
 
     Useful for scripting and piping output.
@@ -215,25 +227,34 @@ async def _async_run(
 def _build_user_message(
     user_input: str,
     image_paths: list[str],
+    audio_paths: list[str] | None = None,
+    video_paths: list[str] | None = None,
 ) -> AgentMessage:
-    """Build a user message, optionally with image content parts.
+    """Build a user message, optionally with multimodal content parts.
 
     Args:
         user_input: The user text input.
         image_paths: List of image file paths to include.
+        audio_paths: List of audio file paths to include.
+        video_paths: List of video file paths to include.
 
     Returns:
-        An AgentMessage with multimodal content if images are provided.
+        An AgentMessage with multimodal content if media is provided.
     """
     from agentsx.core.types import ContentPart  # noqa: PLC0415
 
-    if not image_paths:
+    has_media = image_paths or audio_paths or video_paths
+    if not has_media:
         return AgentMessage(role=MessageRole.USER, content=user_input)
 
     parts: list[ContentPart] = []
     parts.append(ContentPart.make_text(user_input))
     for img_path in image_paths:
         parts.append(ContentPart.make_image_file(img_path))
+    for aud_path in audio_paths or []:
+        parts.append(ContentPart.make_audio_file(aud_path))
+    for vid_path in video_paths or []:
+        parts.append(ContentPart.make_video_file(vid_path))
 
     return AgentMessage(
         role=MessageRole.USER,
@@ -252,6 +273,8 @@ async def _async_chat(
     timeout: float = 0,
     workspace: str = "",
     image: list[str] | None = None,
+    audio: list[str] | None = None,
+    video: list[str] | None = None,
 ) -> None:
     settings = get_settings()
 
@@ -327,6 +350,8 @@ async def _async_chat(
 
     # ── Main loop ────────────────────────────────────────────────────
     image_paths = list(image or [])
+    audio_paths = list(audio or [])
+    video_paths = list(video or [])
 
     loop_timeout = timeout or settings.loop_timeout
     while True:
@@ -359,10 +384,14 @@ async def _async_chat(
                 )
             continue
 
-        user_msg = _build_user_message(user_input, image_paths)
+        user_msg = _build_user_message(
+            user_input, image_paths, audio_paths, video_paths
+        )
         messages.append(user_msg)
         store.append(sess.id, user_msg)
         image_paths = []
+        audio_paths = []
+        video_paths = []
 
         # ── Process agent loop ───────────────────────────────────────
         content_buffer: list[str] = []

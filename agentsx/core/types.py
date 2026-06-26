@@ -6,10 +6,12 @@ Provider-agnostic — no module should import provider-specific types.
 
 from __future__ import annotations
 
+import base64
 import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
@@ -22,6 +24,10 @@ class ContentType(str, Enum):
     TEXT = "text"
     IMAGE_URL = "image_url"
     IMAGE_BASE64 = "image_base64"
+    AUDIO_URL = "audio_url"
+    AUDIO_BASE64 = "audio_base64"
+    VIDEO_URL = "video_url"
+    VIDEO_BASE64 = "video_base64"
 
 
 @dataclass
@@ -31,6 +37,8 @@ class ContentPart:
     type: ContentType
     text: str = ""
     image_url: str = ""
+    audio_url: str = ""
+    video_url: str = ""
     media_type: str = ""
     detail: str = "auto"
 
@@ -45,9 +53,8 @@ class ContentPart:
     @classmethod
     def make_image_file(cls, path: str, detail: str = "auto") -> ContentPart:
         import base64
-        from pathlib import Path as _Path
 
-        file_path = _Path(path)
+        file_path = Path(path)
         data = file_path.read_bytes()
         encoded = base64.b64encode(data).decode("ascii")
         ext = file_path.suffix.lower()
@@ -65,6 +72,85 @@ class ContentPart:
             media_type=media_type,
             detail=detail,
         )
+
+    @classmethod
+    def make_audio_url(cls, url: str) -> ContentPart:
+        """Create an audio URL content part."""
+        return cls(type=ContentType.AUDIO_URL, audio_url=url)
+
+    @classmethod
+    def make_audio_file(cls, path: str) -> ContentPart:
+        """Create an audio content part from a local file (base64)."""
+        file_path = Path(path)
+        data = file_path.read_bytes()
+        encoded = base64.b64encode(data).decode("ascii")
+        ext = file_path.suffix.lower()
+        audio_map = {
+            ".mp3": "audio/mpeg",
+            ".wav": "audio/wav",
+            ".ogg": "audio/ogg",
+            ".flac": "audio/flac",
+            ".m4a": "audio/mp4",
+            ".webm": "audio/webm",
+        }
+        media_type = audio_map.get(ext, "application/octet-stream")
+        return cls(
+            type=ContentType.AUDIO_BASE64,
+            audio_url=f"data:{media_type};base64,{encoded}",
+            media_type=media_type,
+        )
+
+    @classmethod
+    def make_video_url(cls, url: str) -> ContentPart:
+        """Create a video URL content part."""
+        return cls(type=ContentType.VIDEO_URL, video_url=url)
+
+    @classmethod
+    def make_video_file(cls, path: str) -> ContentPart:
+        """Create a video content part from a local file (base64)."""
+        file_path = Path(path)
+        data = file_path.read_bytes()
+        encoded = base64.b64encode(data).decode("ascii")
+        ext = file_path.suffix.lower()
+        video_map = {
+            ".mp4": "video/mp4",
+            ".webm": "video/webm",
+            ".mov": "video/quicktime",
+            ".avi": "video/x-msvideo",
+            ".mkv": "video/x-matroska",
+        }
+        media_type = video_map.get(ext, "application/octet-stream")
+        return cls(
+            type=ContentType.VIDEO_BASE64,
+            video_url=f"data:{media_type};base64,{encoded}",
+            media_type=media_type,
+        )
+
+
+def _audio_format_from_url(url: str, media_type: str) -> str:
+    """Infer audio format from URL or media type."""
+    format_map = {
+        "audio/mpeg": "mp3",
+        "audio/wav": "wav",
+        "audio/ogg": "ogg",
+        "audio/flac": "flac",
+        "audio/mp4": "m4a",
+        "audio/webm": "webm",
+    }
+    if media_type in format_map:
+        return format_map[media_type]
+    ext_map = {
+        ".mp3": "mp3",
+        ".wav": "wav",
+        ".ogg": "ogg",
+        ".flac": "flac",
+        ".m4a": "m4a",
+        ".webm": "webm",
+    }
+    for ext, fmt in ext_map.items():
+        if ext in url.lower():
+            return fmt
+    return "mp3"
 
 
 def _parse_image_source(data_url: str, media_type: str) -> dict[str, Any]:
