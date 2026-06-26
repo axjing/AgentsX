@@ -217,12 +217,14 @@ This project supports running connected app-server and exec-server on different 
 
 ### 7.2 Commit Message Format
 ```
-{feat|fix|docs}[(agent|harness|cli|tools|security|session|extensions|infra)]: concise English description
+{feat|fix|docs|refactor}[(agent|harness|cli|tools|security|session|extensions|infra|context|workspace|mcp)]: concise English description
 ```
 Examples:
 - `feat(agent): add ReAct loop with tool execution`
 - `fix(tools): handle empty arguments in grep tool`
 - `docs: update README with quick start`
+- `refactor: reorganize directory structure for clarity`
+- `feat(security): add path guard, command guard, and resource limits`
 
 ### 7.3 Forbidden Commands
 `git reset --hard`, `git checkout .`, `git clean -fd`, `git stash`, `git add -A`, `git add .`, `git commit --no-verify`, `git push --force`.
@@ -286,6 +288,19 @@ uv run python -m pytest -v
 # Run CLI
 uv run agentsx chat
 uv run agentsx chat --model gpt-4o --allow-all
+uv run agentsx chat --workspace /path/to/project  # restrict file tools
+
+# Module overview
+# agentsx/core/       - Message types, events, errors
+# agentsx/context/    - Compaction, trajectory tracking, summarization
+# agentsx/provider/   - OpenAI, Anthropic LLM providers
+# agentsx/agent/      - ReAct loop, Agent class, subagents
+# agentsx/tools/      - Tool system (risk-tiered: read/write/exec/web/orchestration)
+# agentsx/security/   - Execution policy, path/command guards, resource limits
+# agentsx/extensions/ - Observer-only extension API
+# agentsx/session/    - JSONL session storage
+# agentsx/workspace/  - Workspace manager, git status, file tree index
+# agentsx/cli/        - CLI entry (main.py), slash commands (commands.py), REPL (repl.py)
 
 # Git
 git status
