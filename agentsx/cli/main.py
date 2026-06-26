@@ -93,6 +93,12 @@ def chat(
         "-w",
         help="Restrict file tools to this directory",
     ),
+    image: list[str] = typer.Option(
+        [],
+        "--image",
+        "-i",
+        help="Image path(s) to include in the first message",
+    ),
 ) -> None:
     """Start an interactive chat session with an AI agent."""
     asyncio.run(
@@ -206,6 +212,36 @@ async def _async_run(
         console.print("\n".join(result_parts))
 
 
+def _build_user_message(
+    user_input: str,
+    image_paths: list[str],
+) -> AgentMessage:
+    """Build a user message, optionally with image content parts.
+
+    Args:
+        user_input: The user text input.
+        image_paths: List of image file paths to include.
+
+    Returns:
+        An AgentMessage with multimodal content if images are provided.
+    """
+    from agentsx.core.types import ContentPart  # noqa: PLC0415
+
+    if not image_paths:
+        return AgentMessage(role=MessageRole.USER, content=user_input)
+
+    parts: list[ContentPart] = []
+    parts.append(ContentPart.make_text(user_input))
+    for img_path in image_paths:
+        parts.append(ContentPart.make_image_file(img_path))
+
+    return AgentMessage(
+        role=MessageRole.USER,
+        content=user_input,
+        content_parts=parts,
+    )
+
+
 async def _async_chat(
     model_name: str,
     system_prompt: str,
@@ -215,6 +251,7 @@ async def _async_chat(
     session_id: str = "",
     timeout: float = 0,
     workspace: str = "",
+    image: list[str] | None = None,
 ) -> None:
     settings = get_settings()
 
@@ -289,6 +326,8 @@ async def _async_chat(
     print()  # noqa: T201
 
     # ── Main loop ────────────────────────────────────────────────────
+    image_paths = list(image or [])
+
     loop_timeout = timeout or settings.loop_timeout
     while True:
         try:
@@ -320,9 +359,10 @@ async def _async_chat(
                 )
             continue
 
-        user_msg = AgentMessage(role=MessageRole.USER, content=user_input)
+        user_msg = _build_user_message(user_input, image_paths)
         messages.append(user_msg)
         store.append(sess.id, user_msg)
+        image_paths = []
 
         # ── Process agent loop ───────────────────────────────────────
         content_buffer: list[str] = []

@@ -12,7 +12,6 @@ from agentsx.config import get_settings
 from agentsx.core.errors import ProviderError
 from agentsx.core.types import (
     AgentMessage,
-    MessageRole,
     StreamEvent,
     TextStreamEvent,
     ToolCall,
@@ -149,37 +148,8 @@ class AnthropicProvider(Provider):
         """Convert AgentMessages to Anthropic message format."""
         result: list[dict[str, Any]] = []
         for msg in messages:
-            if msg.role == MessageRole.TOOL:
-                result.append(
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "tool_result",
-                                "tool_use_id": msg.tool_call_id or "",
-                                "content": msg.content,
-                            }
-                        ],
-                    }
-                )
-            else:
-                entry: dict[str, Any] = {"role": msg.role.value, "content": msg.content}
-                if msg.tool_calls:
-                    entry["content"] = [
-                        {"type": "text", "text": msg.content},
-                        *[
-                            {
-                                "type": "tool_use",
-                                "id": tc.id,
-                                "name": tc.name,
-                                "input": tc.arguments,
-                            }
-                            for tc in msg.tool_calls
-                        ],
-                    ]
-                if msg.name:
-                    entry["name"] = msg.name
-                result.append(entry)
+            converted = msg.convert_to_provider("anthropic")
+            result.append(converted)
         return result
 
 

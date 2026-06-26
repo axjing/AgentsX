@@ -12,7 +12,6 @@ from agentsx.config import get_settings
 from agentsx.core.errors import ProviderError
 from agentsx.core.types import (
     AgentMessage,
-    MessageRole,
     StreamEvent,
     TextStreamEvent,
     ToolCall,
@@ -148,31 +147,8 @@ class OpenAIProvider(Provider):
         """Convert AgentMessages to OpenAI message format."""
         result: list[dict[str, Any]] = []
         for msg in messages:
-            if msg.role == MessageRole.TOOL:
-                result.append(
-                    {
-                        "role": "tool",
-                        "content": msg.content,
-                        "tool_call_id": msg.tool_call_id or "",
-                    }
-                )
-            else:
-                entry: dict[str, Any] = {"role": msg.role.value, "content": msg.content}
-                if msg.tool_calls:
-                    entry["tool_calls"] = [
-                        {
-                            "id": tc.id,
-                            "type": "function",
-                            "function": {
-                                "name": tc.name,
-                                "arguments": json.dumps(tc.arguments),
-                            },
-                        }
-                        for tc in msg.tool_calls
-                    ]
-                if msg.name:
-                    entry["name"] = msg.name
-                result.append(entry)
+            converted = msg.convert_to_provider("openai")
+            result.append(converted)
         return result
 
 

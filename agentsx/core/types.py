@@ -13,6 +13,79 @@ from enum import Enum
 from typing import Any
 from uuid import uuid4
 
+# --- Multimodal Content Types ---
+
+
+class ContentType(str, Enum):
+    """Type of content part in a multimodal message."""
+
+    TEXT = "text"
+    IMAGE_URL = "image_url"
+    IMAGE_BASE64 = "image_base64"
+
+
+@dataclass
+class ContentPart:
+    """A single content part in a multimodal message."""
+
+    type: ContentType
+    text: str = ""
+    image_url: str = ""
+    media_type: str = ""
+    detail: str = "auto"
+
+    @classmethod
+    def make_text(cls, content: str) -> ContentPart:
+        return cls(type=ContentType.TEXT, text=content)
+
+    @classmethod
+    def make_image_url(cls, url: str, detail: str = "auto") -> ContentPart:
+        return cls(type=ContentType.IMAGE_URL, image_url=url, detail=detail)
+
+    @classmethod
+    def make_image_file(cls, path: str, detail: str = "auto") -> ContentPart:
+        import base64
+        from pathlib import Path as _Path
+
+        file_path = _Path(path)
+        data = file_path.read_bytes()
+        encoded = base64.b64encode(data).decode("ascii")
+        ext = file_path.suffix.lower()
+        media_map = {
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".gif": "image/gif",
+            ".webp": "image/webp",
+        }
+        media_type = media_map.get(ext, "application/octet-stream")
+        return cls(
+            type=ContentType.IMAGE_BASE64,
+            image_url=f"data:{media_type};base64,{encoded}",
+            media_type=media_type,
+            detail=detail,
+        )
+
+
+def _parse_image_source(data_url: str, media_type: str) -> dict[str, Any]:
+    """Parse a data URL into Anthropic image source format."""
+    if data_url.startswith("data:"):
+        # Extract base64 data after the comma
+        comma_idx = data_url.find(",")
+        if comma_idx != -1:
+            b64_data = data_url[comma_idx + 1 :]
+            return {
+                "type": "base64",
+                "media_type": media_type,
+                "data": b64_data,
+            }
+    return {
+        "type": "base64",
+        "media_type": media_type,
+        "data": data_url,
+    }
+
+
 # ── Message Role ──────────────────────────────────────────────
 
 
@@ -61,6 +134,8 @@ class AgentMessage:
 
     role: MessageRole
     content: str
+    content_parts: list[ContentPart] | None = None
+    """Multimodal content parts. When set, takes precedence over *content*."""
     tool_calls: list[ToolCall] | None = None
     tool_call_id: str | None = None
     """Correlates a tool-result message to the tool call that produced it."""
@@ -90,7 +165,8 @@ class AgentMessage:
                 "content": self.content,
                 "tool_call_id": self.tool_call_id or "",
             }
-        msg: dict[str, Any] = {"role": self.role.value, "content": self.content}
+        msg: dict[str, Any] = {"role": self.role.value}
+        msg["content"] = self._build_content_parts("openai")
         if self.tool_calls:
             msg["tool_calls"] = [
                 {
@@ -107,6 +183,62 @@ class AgentMessage:
             msg["name"] = self.name
         return msg
 
+    def _build_content_parts(self, provider: str) -> str | list[dict[str, Any]]:
+        """Build content for the given provider.
+
+        Returns a string for text-only, or a list of content parts
+        for multimodal messages.
+        """
+        if self.content_parts:
+            parts: list[dict[str, Any]] = []
+            for cp in self.content_parts:
+                if cp.type == ContentType.TEXT:
+                    parts.append({"type": "text", "text": cp.text})
+                elif cp.type == ContentType.IMAGE_URL:
+                    if provider == "openai":
+                        parts.append(
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": cp.image_url,
+                                    "detail": cp.detail,
+                                },
+                            }
+                        )
+                    elif provider == "anthropic":
+                        parts.append(
+                            {
+                                "type": "image",
+                                "source": _parse_image_source(
+                                    cp.image_url, cp.media_type
+                                ),
+                            }
+                        )
+                elif cp.type == ContentType.IMAGE_BASE64:
+                    if provider == "openai":
+                        parts.append(
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": cp.image_url,
+                                    "detail": cp.detail,
+                                },
+                            }
+                        )
+                    elif provider == "anthropic":
+                        parts.append(
+                            {
+                                "type": "image",
+                                "source": _parse_image_source(
+                                    cp.image_url, cp.media_type
+                                ),
+                            }
+                        )
+            if parts and self.content:
+                parts.insert(0, {"type": "text", "text": self.content})
+            return parts if parts else self.content
+        return self.content
+
     def _to_anthropic(self) -> dict[str, Any]:
         if self.role == MessageRole.TOOL:
             return {
@@ -119,20 +251,39 @@ class AgentMessage:
                     }
                 ],
             }
-        msg: dict[str, Any] = {"role": self.role.value, "content": self.content}
-        if self.tool_calls:
-            msg["content"] = [
-                {"type": "text", "text": self.content},
-                *[
-                    {
-                        "type": "tool_use",
-                        "id": tc.id,
-                        "name": tc.name,
-                        "input": tc.arguments,
-                    }
-                    for tc in self.tool_calls
-                ],
-            ]
+        msg: dict[str, Any] = {"role": self.role.value}
+        content_val = self._build_content_parts("anthropic")
+        if isinstance(content_val, list):
+            # Add tool_use blocks if present
+            if self.tool_calls:
+                content_val.extend(
+                    [
+                        {
+                            "type": "tool_use",
+                            "id": tc.id,
+                            "name": tc.name,
+                            "input": tc.arguments,
+                        }
+                        for tc in self.tool_calls
+                    ]
+                )
+            msg["content"] = content_val
+        else:
+            if self.tool_calls:
+                msg["content"] = [
+                    {"type": "text", "text": self.content},
+                    *[
+                        {
+                            "type": "tool_use",
+                            "id": tc.id,
+                            "name": tc.name,
+                            "input": tc.arguments,
+                        }
+                        for tc in self.tool_calls
+                    ],
+                ]
+            else:
+                msg["content"] = content_val
         return msg
 
 
