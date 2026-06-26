@@ -49,7 +49,7 @@ app = typer.Typer(
 
 
 @app.command()
-def chat(
+def chat(  # noqa: B008
     model: str = typer.Option(
         "",
         "--model",
@@ -111,8 +111,8 @@ def chat(
         "-v",
         help="Video file path(s) to include in the first message",
     ),
-) -> None:  # noqa: B008
-    """Start an interactive chat session with an AI agent."""
+) -> None:
+    """Start an interactive chat session with an AI agent."""  # noqa: B008
     asyncio.run(
         _async_chat(
             model,
@@ -156,7 +156,7 @@ def run(
         "--timeout",
         help="Wall-clock timeout for agent loop (seconds, 0=disabled)",
     ),
-) -> None:  # noqa: B008
+) -> None:
     """Execute a single prompt and exit.
 
     Useful for scripting and piping output.
@@ -354,6 +354,10 @@ async def _async_chat(
     video_paths = list(video or [])
 
     loop_timeout = timeout or settings.loop_timeout
+    image_paths = list(image or [])
+    audio_paths = list(audio or [])
+    video_paths = list(video or [])
+
     while True:
         try:
             user_input = await session.prompt_async(">>> ")

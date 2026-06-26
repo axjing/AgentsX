@@ -247,5 +247,73 @@ def _provider_prefix(provider_name: str) -> str:
     mapping = {
         "openai": "gpt-",
         "anthropic": "claude-",
+        "gemini": "gemini-",
+        "deepseek": "deepseek-",
+        "groq": "llama-|mixtral-",
+        "openrouter": "",
+        "ollama": "",
+        "custom": "",
     }
     return mapping.get(provider_name, provider_name)
+
+
+# Model name to provider mapping (explicit overrides)
+_MODEL_TO_PROVIDER: dict[str, str] = {
+    # Google Gemini
+    "gemini-2.0-flash": "gemini",
+    "gemini-2.0-flash-lite": "gemini",
+    "gemini-2.5-pro": "gemini",
+    "gemini-2.5-flash": "gemini",
+    "gemini-1.5-pro": "gemini",
+    "gemini-1.5-flash": "gemini",
+    # DeepSeek
+    "deepseek-chat": "deepseek",
+    "deepseek-coder": "deepseek",
+    "deepseek-reasoner": "deepseek",
+    # Groq
+    "llama-3.3-70b-versatile": "groq",
+    "llama-3.1-8b-instant": "groq",
+    "mixtral-8x7b-32768": "groq",
+    # Common model aliases
+    "gpt-4o": "openai",
+    "gpt-4o-mini": "openai",
+    "o1": "openai",
+    "o3-mini": "openai",
+    "claude-sonnet-4-20250514": "anthropic",
+    "claude-opus-4-20250414": "anthropic",
+    "claude-haiku-4-20250414": "anthropic",
+}
+
+
+def _resolve_provider_name(model_name: str) -> str | None:
+    """Resolve a model name to a provider name.
+
+    Supports:
+    - Explicit slash notation: "gemini/gemini-2.0-flash" -> "gemini"
+    - Explicit mapping: "deepseek-chat" -> "deepseek"
+    - Prefix matching: "gpt-4o" -> "openai"
+    """
+    # Slash notation takes highest priority
+    if "/" in model_name:
+        return model_name.split("/")[0]
+
+    # Explicit mapping
+    if model_name in _MODEL_TO_PROVIDER:
+        return _MODEL_TO_PROVIDER[model_name]
+
+    # Prefix matching
+    _prefixes = {
+        "openai": "gpt-",
+        "anthropic": "claude-",
+        "gemini": "gemini-",
+        "deepseek": "deepseek-",
+        "groq": "llama-",
+        "openrouter": "",
+        "ollama": "",
+        "custom": "",
+    }
+    for name, prefix in _prefixes.items():
+        if prefix and model_name.startswith(prefix):
+            return name
+
+    return None
