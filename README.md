@@ -1,59 +1,59 @@
 # AgentsX
 
-功能性强、简洁、高效、可拓展、高可用的 Agent Harness。
+Feature-rich, clean, efficient, extensible, highly available Agent Harness.
 
-AgentsX 是一个轻量级 AI Agent 运行时框架，提供 ReAct 循环、多 LLM Provider 抽象、内置工具系统、安全策略引擎、会话管理、扩展 API 以及交互式 CLI。
+A lightweight AI Agent runtime framework with ReAct loop, multi-Provider abstraction, risk-tiered tool system, multi-layer security, session management, extension API, and interactive CLI.
 
-## 特性
+## Features
 
-- **ReAct Agent 循环** — 纯异步生成器驱动的 think → act → observe → repeat 循环，最大步数可控
-- **多 Provider 支持** — OpenAI（含 tool call delta streaming）与 Anthropic（含 tool use streaming），统一 `Provider` 抽象，可通过 `register_provider()` 扩展
-- **内置工具系统** — `@tool()` 装饰器 + `ToolRegistry` 自动注册、JSON Schema 生成；8 个内置工具（文件读写、glob、grep、shell、web 抓取与搜索）
-- **安全策略引擎** — `Rule` + `ExecutionPolicy`，`fnmatch` 模式匹配，三档决策（ALLOW / PROMPT / FORBIDDEN）；默认策略自动允许只读操作、提示可变操作
-- **会话管理** — JSONL 文件树存储（`~/.agentsx/sessions/`），零外部依赖，O(1) 追加写入，支持分支（branch）
-- **扩展 API** — `ExtensionAPI` 观察者模式，7 个预定义生命周期事件，异常隔离，支持通过 Python entry points 发现并加载扩展
-- **交互式 CLI** — `agentsx chat` 命令，prompt_toolkit 多轮对话、rich 流式输出、工具执行面板、斜杠命令
+- **ReAct Agent Loop** -- async generator-driven think -> act -> observe -> repeat, max steps configurable
+- **Multi-Provider** -- OpenAI (with tool call delta streaming) and Anthropic (with tool use streaming), unified Provider ABC, extendable via register_provider()
+- **Built-in Tools** -- @tool() decorator + ToolRegistry auto-registration + JSON Schema generation; organized by risk level (read/write/exec/web/orchestration)
+- **Multi-Layer Security** -- ExecutionPolicy (ALLOW/PROMPT/FORBIDDEN) + PathGuard (path traversal detection) + CommandGuard (command injection prevention) + ResourceLimits (output truncation)
+- **Context Management** -- auto context compaction (token-count + optional LLM summarization)
+- **Session Management** -- JSONL file-tree storage (~/.agentsx/sessions/), zero deps, O(1) append writes, branch support
+- **Extension API** -- ExtensionAPI observer pattern, 7 lifecycle events, exception isolation, entry_points discovery
+- **Interactive CLI** -- agentsx chat, prompt_toolkit, rich streaming, tool panels, slash commands, --workspace flag
 
-## 快速开始
+## Quick Start
 
-### 安装
+### Installation
 
 ```bash
-# 从源码安装
+# From source
 git clone <repo-url>
 cd agentsx
 uv sync
 
-# 安装 Provider 可选依赖（按需）
+# Copy config template
+cp .env.example .env
+# Edit .env to add your API key
+
+# Install provider optional deps (as needed)
 uv sync --extra openai      # OpenAI
 uv sync --extra anthropic   # Anthropic
 ```
 
-### CLI 使用
+### CLI Usage
 
 ```bash
-# 启动交互式对话（默认模型：gpt-4o）
+# Start interactive chat (default: gpt-4o)
 agentsx chat
 
-# 指定模型
+# Specify model
 agentsx chat --model claude-sonnet-4-20250514
 
-# 禁用工具
+# Disable tools
 agentsx chat --no-tools
 
-# 跳过安全确认（ALLOW 所有工具）
+# Skip safety confirmation (ALLOW all tools)
 agentsx chat --allow-all
 
-# 自定义系统提示
+# Restrict file tools to a directory
+agentsx chat --workspace /path/to/project
+
+# Custom system prompt
 agentsx chat --system "You are a coding assistant."
-```
-
-环境变量配置（详见下方配置章节）：
-
-```bash
-export AGENTSX_MODEL_NAME="gpt-4o"
-export AGENTSX_OPENAI_API_KEY="sk-..."
-export AGENTSX_ANTHROPIC_API_KEY="sk-ant-..."
 ```
 
 ### Python API
@@ -71,115 +71,114 @@ async def main():
     provider = create_provider(model_name="gpt-4o")
     tools = ToolRegistry()
     tools.register_all(*ALL_TOOLS)
-
     messages = [
         AgentMessage(role=MessageRole.SYSTEM, content="You are a helpful assistant."),
-        AgentMessage(role=MessageRole.USER, content="Read the file README.md and summarize it"),
+        AgentMessage(role=MessageRole.USER, content="Read README.md and summarize"),
     ]
-
-    async for event in run_agent_loop(
-        provider, messages, tools=tools,
-        policy=ExecutionPolicy.default(),
-    ):
+    async for event in run_agent_loop(provider, messages, tools=tools, policy=ExecutionPolicy.default()):
         print(event)
 
 asyncio.run(main())
 ```
 
-## 架构
+### Agent Class (Multi-Turn)
+
+```python
+from agentsx.agent import Agent
+
+async def main():
+    agent = Agent(model_name="gpt-4o")
+    async for event in agent.run("What is Python?"):
+        pass
+    async for event in agent.run("And Rust?"):
+        pass  # Remembers first turn
+    agent.clear_history()  # Keep system prompt
+```
+
+## Architecture
 
 ```
 agentsx/
-├── __init__.py           # 包入口，版本声明
-├── config.py             # AgentsXSettings（AGENTSX_* 环境变量）
-│
-├── core/
-│   ├── types.py          # MessageRole, AgentMessage, StreamEvent, Decision, 等
-│   └── errors.py         # 类型化异常层级
-│
-├── provider/
-│   ├── __init__.py       # Provider ABC, Model, register_provider(), create_provider()
-│   ├── openai.py         # OpenAI 实现（httpx streaming + SSE 解析）
-│   └── anthropic.py      # Anthropic 实现（httpx streaming + SSE 解析）
-│
-├── agent/
-│   ├── loop.py           # run_agent_loop() — 纯函数 ReAct 循环
-│   └── agent.py          # Agent 类 — 便捷封装
-│
-├── tools/
+├── __init__.py           # Package entry
+├── config.py             # Settings (AGENTSX_* env vars)
+├── core/                 # Core types & errors
+│   ├── types.py
+│   └── errors.py
+├── context/              # Context management
+│   └── compaction.py
+├── provider/             # LLM providers
+│   ├── __init__.py       # Provider ABC, registry
+│   ├── openai.py
+│   └── anthropic.py
+├── agent/                # Agent logic
+│   ├── loop.py           # run_agent_loop()
+│   ├── agent.py          # Agent class (multi-turn)
+│   └── subagent.py       # SubAgentRuntime
+├── tools/                # Tool system
 │   ├── __init__.py       # ToolSpec, ToolRegistry, @tool()
-│   └── builtin/
-│       ├── filesystem.py # read, write, edit, glob, grep
-│       ├── shell.py      # bash
-│       └── web.py        # web_fetch, web_search
-│
-├── security.py           # Rule, ExecutionPolicy（fnmatch 策略引擎）
-├── session.py            # Session, SessionStore（JSONL 文件树）
-├── extensions.py         # ExtensionAPI, 7 个事件, entry_points 加载
-│
+│   └── builtin/          # Risk-tiered tools
+│       ├── read/           # file_read, file_glob, file_grep
+│       ├── write/          # file_write, file_edit
+│       ├── exec/           # shell (async, non-blocking)
+│       ├── web/            # web_fetch, web_search
+│       └── orchestration/  # subagent
+├── security/             # Security engine
+│   ├── policy.py         # ExecutionPolicy, Rule
+│   ├── path_guard.py     # PathGuard
+│   ├── command_guard.py  # CommandGuard
+│   └── resource_limits.py # ResourceLimits
+├── extensions/           # Extension system
+│   └── api.py
+├── session/              # Session storage
+│   └── store.py
+├── orchestrator.py       # Sub-agent lifecycle
 └── cli/
-    └── main.py           # typer chat 命令
+    ├── main.py           # typer entry
+    └── commands.py       # slash commands
 ```
 
-### Agent 循环数据流
+## Security
 
-```
-用户输入 → Provider.stream() → TextStreamEvent → yield ModelResponseEvent(delta)
-                                     │
-                            ToolCallStreamEvent
-                                     │
-                          ┌──────────┴──────────┐
-                          │  ExecutionPolicy     │
-                          │  (ALLOW/PROMPT/FORBIDDEN)
-                          └──────────┬──────────┘
-                                     │
-                          ToolRegistry.call()
-                                     │
-                          yield ToolExecutionEvent
-                                     │
-                          追加 ToolResult → 进入下一轮循环
-```
+AgentsX implements multi-layer security:
 
-## 配置
+1. **ExecutionPolicy** -- fnmatch pattern matching, three-tier decision (ALLOW/PROMPT/FORBIDDEN)
+2. **PathGuard** -- path traversal detection (../), symlink attack prevention, workspace boundary enforcement
+3. **CommandGuard** -- dangerous command detection (rm -rf /, fork bombs, mkfs) + shell injection pattern detection
+4. **ResourceLimits** -- automatic tool output truncation, per-tool-type limits
 
-所有配置通过 `AGENTSX_*` 环境变量注入（Pydantic Settings 驱动）：
+## Configuration
 
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `AGENTSX_MODEL_NAME` | `gpt-4o` | 默认 LLM 模型 |
-| `AGENTSX_API_KEY` | `""` | 默认 Provider API 密钥 |
-| `AGENTSX_API_BASE` | `""` | 自定义 API 基础 URL |
-| `AGENTSX_MAX_STEPS` | `25` | 最大工具调用迭代次数 |
-| `AGENTSX_SYSTEM_PROMPT` | `"You are a helpful AI assistant."` | 默认系统提示 |
-| `AGENTSX_SESSION_DIR` | `~/.agentsx/sessions/` | 会话存储目录 |
-| `AGENTSX_POLICY_DEFAULT` | `"prompt"` | 默认安全策略 |
-| `AGENTSX_OPENAI_API_KEY` | `""` | OpenAI API 密钥 |
-| `AGENTSX_OPENAI_API_BASE` | `""` | OpenAI API 基础 URL |
-| `AGENTSX_ANTHROPIC_API_KEY` | `""` | Anthropic API 密钥 |
-| `AGENTSX_ANTHROPIC_API_BASE` | `""` | Anthropic API 基础 URL |
-| `AGENTSX_TOOL_TIMEOUT` | `30` | 工具执行超时（秒） |
+All config via `AGENTSX_*` environment variables (Pydantic Settings):
 
-## 开发
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AGENTSX_MODEL_NAME` | `gpt-4o` | Default LLM model |
+| `AGENTSX_API_KEY` | `""` | Default Provider API key |
+| `AGENTSX_API_BASE` | `""` | Custom API base URL |
+| `AGENTSX_MAX_STEPS` | `25` | Max tool-call iterations |
+| `AGENTSX_SYSTEM_PROMPT` | `"You are a helpful AI assistant."` | Default system prompt |
+| `AGENTSX_SESSION_DIR` | `~/.agentsx/sessions/` | Session storage directory |
+| `AGENTSX_POLICY_DEFAULT` | `"prompt"` | Default security policy |
+| `AGENTSX_OPENAI_API_KEY` | `""` | OpenAI API key |
+| `AGENTSX_ANTHROPIC_API_KEY` | `""` | Anthropic API key |
+| `AGENTSX_TOOL_TIMEOUT` | `30` | Tool execution timeout (seconds) |
+| `AGENTSX_MAX_TOOL_OUTPUT` | `50000` | Max tool output chars (0 = unlimited) |
 
-### 环境准备
+## Development
 
 ```bash
 uv sync --extra dev
-```
 
-### 验证命令
-
-```bash
-# 代码检查
+# Lint
 uv run ruff check agentsx/ tests/
 
-# 类型检查
+# Type check
 uv run mypy agentsx/ tests/ --strict
 
-# 测试
+# Test
 uv run python -m pytest -v
 ```
 
-## 许可证
+## License
 
 Apache 2.0
