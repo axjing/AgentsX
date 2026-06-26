@@ -38,6 +38,8 @@ _PROVIDER_KEYS: dict[str, tuple[str, str]] = {
     "groq": ("groq_api_key", ""),
     "openrouter": ("openrouter_api_key", ""),
     "ollama": ("", "ollama_api_base"),
+    "vllm": ("vllm_api_key", "vllm_api_base"),
+    "sglang": ("sglang_api_key", "sglang_api_base"),
     "custom": ("custom_api_key", "custom_api_base"),
 }
 
@@ -48,6 +50,8 @@ _PROVIDER_BASE_URLS: dict[str, str] = {
     "groq": "https://api.groq.com/openai/v1",
     "openrouter": "https://openrouter.ai/api/v1",
     "ollama": "http://localhost:11434/v1",
+    "vllm": "http://localhost:8000/v1",
+    "sglang": "http://localhost:30000/v1",
     "custom": "",
 }
 
@@ -275,4 +279,6 @@ register_provider("deepseek", GenericProvider)
 register_provider("groq", GenericProvider)
 register_provider("openrouter", GenericProvider)
 register_provider("ollama", GenericProvider)
+register_provider("vllm", GenericProvider)
+register_provider("sglang", GenericProvider)
 register_provider("custom", GenericProvider)

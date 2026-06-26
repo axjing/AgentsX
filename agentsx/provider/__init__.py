@@ -287,6 +287,8 @@ def _provider_prefix(provider_name: str) -> str:
         "groq": "llama-|mixtral-",
         "openrouter": "",
         "ollama": "",
+        "vllm": "",
+        "sglang": "",
         "custom": "",
     }
     return mapping.get(provider_name, provider_name)
@@ -317,6 +319,17 @@ _MODEL_TO_PROVIDER: dict[str, str] = {
     "claude-sonnet-4-20250514": "anthropic",
     "claude-opus-4-20250414": "anthropic",
     "claude-haiku-4-20250414": "anthropic",
+    # vLLM common model IDs
+    "meta-llama/Llama-3.1-70B-Instruct": "vllm",
+    "meta-llama/Llama-3.1-8B-Instruct": "vllm",
+    "Qwen/Qwen2.5-72B-Instruct": "vllm",
+    "Qwen/Qwen2.5-Coder-32B-Instruct": "vllm",
+    "mistralai/Mixtral-8x7B-Instruct-v0.1": "vllm",
+    # SGLang common model IDs
+    "meta-llama/Llama-3.1-70B-Instruct": "sglang",
+    "meta-llama/Llama-3.1-8B-Instruct": "sglang",
+    "Qwen/Qwen2.5-72B-Instruct": "sglang",
+    "Qwen/Qwen2.5-Coder-32B-Instruct": "sglang",
 }
 
 
@@ -345,6 +358,8 @@ def _resolve_provider_name(model_name: str) -> str | None:
         "groq": "llama-",
         "openrouter": "",
         "ollama": "",
+        "vllm": "",
+        "sglang": "",
         "custom": "",
     }
     for name, prefix in _prefixes.items():
