@@ -33,8 +33,8 @@ from agentsx.core.types import (
     ToolExecutionEvent,
 )
 from agentsx.provider import create_provider
-from agentsx.security import ExecutionPolicy
-from agentsx.session import SessionStore
+from agentsx.security.policy import ExecutionPolicy
+from agentsx.session.store import SessionStore
 from agentsx.tools import ToolRegistry
 from agentsx.tools.builtin import ALL_TOOLS
 

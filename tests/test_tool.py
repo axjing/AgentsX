@@ -8,7 +8,7 @@ from agentsx.core.types import (
     ModelResponseEvent,
 )
 from agentsx.provider import create_provider
-from agentsx.security import ExecutionPolicy
+from agentsx.security.policy import ExecutionPolicy
 from agentsx.tools import ToolRegistry
 from agentsx.tools.builtin import ALL_TOOLS
 

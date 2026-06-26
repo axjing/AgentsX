@@ -19,17 +19,19 @@ from agentsx.core.types import (
     ModelResponseEvent,
 )
 from agentsx.provider import Provider, create_provider
-from agentsx.security import ExecutionPolicy
+from agentsx.security.policy import ExecutionPolicy
 from agentsx.tools import ToolRegistry
-from agentsx.tools.builtin.filesystem import (
-    tool_file_edit,
+from agentsx.tools.builtin.exec.shell import tool_bash
+from agentsx.tools.builtin.read.filesystem import (
     tool_file_glob,
     tool_file_grep,
     tool_file_read,
+)
+from agentsx.tools.builtin.web.web import tool_web_fetch, tool_web_search
+from agentsx.tools.builtin.write.filesystem import (
+    tool_file_edit,
     tool_file_write,
 )
-from agentsx.tools.builtin.shell import tool_bash
-from agentsx.tools.builtin.web import tool_web_fetch, tool_web_search
 
 # All built-in tools (used to build permissive registries).
 _ALL_BUILTIN_TOOLS = [

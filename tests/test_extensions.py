@@ -13,7 +13,7 @@ from agentsx.core.types import (
     ToolCall,
     ToolCallStreamEvent,
 )
-from agentsx.extensions import (
+from agentsx.extensions.api import (
     ALL_EVENTS,
     EVENT_ON_ERROR,
     EVENT_ON_LOOP_END,
@@ -126,7 +126,7 @@ class TestExtensionAPI:
         mock_entry.load.return_value = setup_alpha
 
         with patch(
-            "agentsx.extensions._entry_points",
+            "agentsx.extensions.api._entry_points",
             return_value=[mock_entry],
         ):
             api.load_entry_points(group="test.extensions")
@@ -142,7 +142,7 @@ class TestExtensionAPI:
         mock_entry.load.side_effect = ImportError("broken module")
 
         with patch(
-            "agentsx.extensions._entry_points",
+            "agentsx.extensions.api._entry_points",
             return_value=[mock_entry],
         ):
             api.load_entry_points(group="test.extensions")  # no error

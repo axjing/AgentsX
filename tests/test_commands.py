@@ -16,7 +16,7 @@ from agentsx.cli.commands import (
     cmd_sessions,
     cmd_title,
 )
-from agentsx.session import SessionStore
+from agentsx.session.store import SessionStore
 
 
 @pytest.fixture

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from agentsx.core.compaction import (
+from agentsx.context.compaction import (
     compact_messages,
     estimate_message_tokens,
     estimate_tokens,

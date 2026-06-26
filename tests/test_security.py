@@ -17,7 +17,7 @@ from agentsx.core.types import (
     ToolExecutionEvent,
 )
 from agentsx.provider import Model, Provider
-from agentsx.security import ExecutionPolicy, Rule
+from agentsx.security.policy import ExecutionPolicy, Rule
 from agentsx.tools import ToolRegistry, ToolSpec
 
 # ── Helpers ─────────────────────────────────────────────────

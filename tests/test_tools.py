@@ -10,11 +10,11 @@ import pytest
 from agentsx.core.errors import ToolError
 from agentsx.tools import ToolRegistry, ToolSpec, tool
 from agentsx.tools.builtin import ALL_TOOLS
-from agentsx.tools.builtin.filesystem import (
+from agentsx.tools.builtin.read.filesystem import (
     tool_file_glob,
     tool_file_read,
-    tool_file_write,
 )
+from agentsx.tools.builtin.write.filesystem import tool_file_write
 
 # ── ToolSpec ─────────────────────────────────────────────────────────
 

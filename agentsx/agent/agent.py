@@ -7,9 +7,9 @@ from collections.abc import AsyncIterator
 from agentsx.agent.loop import run_agent_loop
 from agentsx.config import get_settings
 from agentsx.core.types import AgentEvent, AgentMessage, MessageRole
-from agentsx.extensions import ExtensionAPI
+from agentsx.extensions.api import ExtensionAPI
 from agentsx.provider import Provider, create_provider
-from agentsx.security import ExecutionPolicy
+from agentsx.security.policy import ExecutionPolicy
 from agentsx.tools import ToolRegistry
 
 

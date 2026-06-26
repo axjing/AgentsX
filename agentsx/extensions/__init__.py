@@ -1,8 +1,9 @@
-"""Backward-compat alias. Import from agentsx.extensions instead."""
+"""Lightweight extension API -- observer-only, no behaviour modification.
+
+Extensions observe and record; they never modify behaviour.
+"""
 
 from __future__ import annotations
-
-import warnings
 
 from agentsx.extensions.api import (
     ALL_EVENTS,
@@ -18,11 +19,6 @@ from agentsx.extensions.api import (
     Handler,
 )
 
-warnings.warn(
-    "agentsx.extensions module is deprecated; use agentsx.extensions.api",
-    DeprecationWarning,
-    stacklevel=2,
-)
 __all__ = [
     "ALL_EVENTS",
     "EVENT_ON_ERROR",

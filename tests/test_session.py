@@ -9,7 +9,7 @@ import pytest
 
 from agentsx.core.errors import SessionError
 from agentsx.core.types import AgentMessage, MessageRole, ToolCall
-from agentsx.session import Session, SessionStore
+from agentsx.session.store import Session, SessionStore
 
 
 class TestSession:

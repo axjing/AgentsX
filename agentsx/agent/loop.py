@@ -22,7 +22,7 @@ import time
 from collections.abc import AsyncIterator
 
 from agentsx.config import get_settings
-from agentsx.core.compaction import compact_messages, should_compact
+from agentsx.context.compaction import compact_messages, should_compact
 from agentsx.core.types import (
     AgentEvent,
     AgentMessage,
@@ -39,7 +39,7 @@ from agentsx.core.types import (
     ToolExecutionEvent,
     ToolResult,
 )
-from agentsx.extensions import (
+from agentsx.extensions.api import (
     EVENT_ON_ERROR,
     EVENT_ON_LOOP_END,
     EVENT_ON_LOOP_START,
@@ -51,7 +51,7 @@ from agentsx.extensions import (
     ExtensionEvent,
 )
 from agentsx.provider import Provider
-from agentsx.security import ExecutionPolicy
+from agentsx.security.policy import ExecutionPolicy
 from agentsx.tools import ToolRegistry
 
 logger = logging.getLogger(__name__)

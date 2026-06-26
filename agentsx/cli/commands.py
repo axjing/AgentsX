@@ -9,7 +9,7 @@ tuple so the caller can update its state.
 from __future__ import annotations
 
 from agentsx.core.errors import SessionError
-from agentsx.session import SessionStore
+from agentsx.session.store import SessionStore
 
 
 def cmd_sessions(
