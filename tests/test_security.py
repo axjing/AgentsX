@@ -24,32 +24,6 @@ from agentsx.tools import ToolRegistry, ToolSpec
 
 
 class _MockProvider(Provider):
-    """Build a mock provider that yields a single ``bash`` tool call."""
-
-    def __init__(self) -> None:
-        self.model = Model(id="test", provider_name="test", max_tokens=256)
-        self.tools: object = None
-
-    async def stream(
-        self,
-        messages: list[AgentMessage],
-    ) -> AsyncIterator[StreamEvent]:
-        yield ToolCallStreamEvent(
-            tool_call=ToolCall(
-                id="tc1",
-                name="bash",
-                arguments={"command": "echo hi"},
-            ),
-        )
-
-    def format_messages(
-        self,
-        messages: list[AgentMessage],
-    ) -> list[dict[str, object]]:
-        return [{"role": m.role.value, "content": m.content} for m in messages]
-
-
-class _MockProvider(Provider):
     """Test provider that yields a single bash tool call."""
 
     def __init__(self) -> None:

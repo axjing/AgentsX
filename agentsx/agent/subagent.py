@@ -119,6 +119,11 @@ class SubAgentRuntime:
         return list(self._messages)
 
     @property
+    def model_name(self) -> str:
+        """The model identifier for this sub-agent."""
+        return self._config.model_name
+
+    @property
     def spawn_depth(self) -> int:
         """Current depth of recursive spawning."""
         return self._spawn_depth

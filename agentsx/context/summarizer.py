@@ -127,7 +127,7 @@ class ContextSummarizer:
         if summary:
             result.append(
                 AgentMessage(
-                    role=MessageRole.SYSTEM,
+                    role=MessageRole.USER,
                     content=summary,
                 )
             )

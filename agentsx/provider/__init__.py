@@ -325,11 +325,6 @@ _MODEL_TO_PROVIDER: dict[str, str] = {
     "Qwen/Qwen2.5-72B-Instruct": "vllm",
     "Qwen/Qwen2.5-Coder-32B-Instruct": "vllm",
     "mistralai/Mixtral-8x7B-Instruct-v0.1": "vllm",
-    # SGLang common model IDs
-    "meta-llama/Llama-3.1-70B-Instruct": "sglang",
-    "meta-llama/Llama-3.1-8B-Instruct": "sglang",
-    "Qwen/Qwen2.5-72B-Instruct": "sglang",
-    "Qwen/Qwen2.5-Coder-32B-Instruct": "sglang",
 }
 
 

@@ -354,9 +354,6 @@ async def _async_chat(
     video_paths = list(video or [])
 
     loop_timeout = timeout or settings.loop_timeout
-    image_paths = list(image or [])
-    audio_paths = list(audio or [])
-    video_paths = list(video or [])
 
     while True:
         try:

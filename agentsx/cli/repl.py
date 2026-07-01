@@ -56,17 +56,6 @@ def handle_command(
     Returns:
         (new_session_id, new_model_name) or (None, current_model).
     """
-    """Process a slash command typed by the user.
-
-    Args:
-        cmd: The raw command line.
-        messages: Current conversation messages (modified in-place for /clear).
-        store: SessionStore instance (required for session commands).
-        session_id: Current session ID.
-
-    Returns:
-        New session ID if the session was switched, or None.
-    """
     parts = cmd.split()
     command = parts[0].lower()
 

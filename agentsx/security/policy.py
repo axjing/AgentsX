@@ -105,7 +105,7 @@ class ExecutionPolicy:
             target = Path(path_val).resolve()
         except (ValueError, RuntimeError):
             return False
-        return any(_is_subpath(target, allowed) for allowed in self._allowed_dirs)
+        return any(is_subpath(target, allowed) for allowed in self._allowed_dirs)
 
     @classmethod
     def default(cls) -> ExecutionPolicy:
@@ -128,7 +128,7 @@ class ExecutionPolicy:
         )
 
 
-def _is_subpath(target: Path, base: Path) -> bool:
+def is_subpath(target: Path, base: Path) -> bool:
     """Return True if *target* is inside *base*."""
     try:
         target.relative_to(base)

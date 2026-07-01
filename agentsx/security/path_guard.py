@@ -9,6 +9,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from agentsx.security.policy import is_subpath
+
 
 @dataclass
 class PathCheckResult:
@@ -71,9 +73,10 @@ class PathGuard:
 
         # Check for symlink in original path
         if not self._allow_symlinks:
+            accumulated = Path()
             for component in target.parts:
-                check = target.parent / component
-                if check.is_symlink():
+                accumulated = accumulated / component
+                if accumulated.is_symlink():
                     return PathCheckResult(
                         is_safe=False,
                         resolved=resolved,
@@ -81,7 +84,7 @@ class PathGuard:
                     )
 
         # Check workspace boundary
-        if self._workspace and not _is_subpath(resolved, self._workspace):
+        if self._workspace and not is_subpath(resolved, self._workspace):
             return PathCheckResult(
                 is_safe=False,
                 resolved=resolved,
@@ -101,15 +104,6 @@ class PathGuard:
     def is_allowed(self, path: str | Path) -> bool:
         """Quick check: is the path safe?"""
         return self.check(path).is_safe
-
-
-def _is_subpath(target: Path, base: Path) -> bool:
-    """Return True if *target* is inside *base* (or equal to it)."""
-    try:
-        target.relative_to(base)
-        return True
-    except ValueError:
-        return False
 
 
 def _has_traversal_pattern(path: str) -> bool:

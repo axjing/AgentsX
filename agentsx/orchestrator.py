@@ -118,9 +118,7 @@ class Orchestrator:
         return [
             {
                 "id": rec.runtime.id,
-                "model": rec.runtime.messages[0].content
-                if rec.runtime.messages
-                else "",
+                "model": rec.runtime.model_name,
                 "spawned_at": rec.spawned_at,
                 "prompt": rec.prompt,
                 "depth": rec.depth,

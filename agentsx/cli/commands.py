@@ -133,9 +133,7 @@ def cmd_title(
 ) -> tuple[str, str]:
     """Rename the current session."""
     try:
-        session = store.get(current_id)
-        session.title = title
-        store._write_meta(session)
+        store.update_title(current_id, title)
     except SessionError as exc:
         return f"Error: {exc}", current_id
     return f"Session renamed to '{title}'", current_id

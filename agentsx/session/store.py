@@ -231,6 +231,24 @@ class SessionStore:
         self._evict_cache()
         return session
 
+    def update_title(self, session_id: str, title: str) -> Session:
+        """Update the title of a session and persist to disk.
+
+        Args:
+            session_id: The session ID to update.
+            title: The new title.
+
+        Returns:
+            The updated Session.
+
+        Raises:
+            SessionError: If the session does not exist.
+        """
+        session = self.get(session_id)
+        session.title = title
+        self._write_meta(session)
+        return session
+
     # ── Internals ──────────────────────────────────────────────────────
 
     def _session_dir(self, session_id: str) -> Path:

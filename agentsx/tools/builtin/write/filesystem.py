@@ -27,7 +27,7 @@ def tool_file_edit(
     text = filepath.read_text(encoding="utf-8")
     if old_string not in text:
         return f"Error: old_string not found in {path}"
-    new_text = text.replace(old_string, new_string)
+    new_text = text.replace(old_string, new_string, 1)
     filepath.write_text(new_text, encoding="utf-8")
     old_len = len(old_string)
     new_len = len(new_string)

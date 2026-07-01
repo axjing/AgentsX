@@ -98,6 +98,9 @@ async def run_agent_loop(
     if max_steps is None:
         max_steps = settings.max_steps
 
+    if tools is not None:
+        provider.tools = tools
+
     step = 0
     loop_start = time.monotonic()
 
@@ -162,7 +165,6 @@ async def run_agent_loop(
         pending_calls: list[ToolCallStreamEvent] = []
         step_start = time.monotonic()
 
-        provider.tools = tools
         try:
             async for event in provider.stream_with_retry(messages):
                 if isinstance(event, TextStreamEvent):
