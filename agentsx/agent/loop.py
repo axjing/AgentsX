@@ -15,8 +15,6 @@ Automatic context compaction is triggered when the message list
 exceeds configured thresholds (based on Pi's design).
 """
 
-from __future__ import annotations
-
 import logging
 import time
 from collections.abc import AsyncIterator

@@ -1,7 +1,5 @@
 """Tests for context summarization."""
 
-from __future__ import annotations
-
 from agentsx.context.summarizer import ContextSummarizer
 from agentsx.core.types import AgentMessage, MessageRole
 

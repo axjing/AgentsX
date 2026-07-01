@@ -6,8 +6,6 @@ Design constraints (avoids the Hermes 8-hook plugin trap):
     - Exceptions in extension handlers are caught and logged (never crash the loop).
 """
 
-from __future__ import annotations
-
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -71,7 +69,6 @@ class ExtensionEvent:
 
 Handler = Callable[[ExtensionEvent], Awaitable[None]]
 """Signature for extension event handlers."""
-
 
 # ── Extension API ─────────────────────────────────────────
 

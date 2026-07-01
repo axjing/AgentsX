@@ -7,13 +7,13 @@ Usage::
     registry.call("read", path="/tmp/foo.txt")
 """
 
-from __future__ import annotations
-
 import inspect
 from collections.abc import Callable
 from typing import Any, TypeVar
 
 from agentsx.core.errors import ToolError
+
+_F = TypeVar("_F", bound=Callable[..., Any])
 
 
 class ToolSpec:
@@ -23,7 +23,7 @@ class ToolSpec:
         self,
         name: str,
         description: str,
-        fn: Any,
+        fn: Callable[..., Any],
         parameters: dict[str, object] | None = None,
         check_fn: Callable[[], bool] | None = None,
     ) -> None:
@@ -52,7 +52,7 @@ class ToolSpec:
             "input_schema": self.parameters,
         }
 
-    async def call(self, **kwargs: Any) -> str:
+    async def call(self, **kwargs: object) -> str:
         """Execute the tool and return the result as a string."""
         try:
             result = self.fn(**kwargs)
@@ -84,7 +84,7 @@ class ToolRegistry:
         """Look up a tool by name."""
         return self._tools.get(name)
 
-    async def call(self, name: str, **kwargs: Any) -> str:
+    async def call(self, name: str, **kwargs: object) -> str:
         """Look up and call a tool by name."""
         tool = self.get(name)
         if tool is None:
@@ -135,9 +135,6 @@ def tool(
 
 # ── Helpers ────────────────────────────────────────────────────────────
 
-_F = TypeVar("_F", bound=Callable[..., Any])
-
-
 _JSON_TYPE_MAP: dict[str, str] = {
     "str": "string",
     "int": "integer",
@@ -150,7 +147,7 @@ _JSON_TYPE_MAP: dict[str, str] = {
 }
 
 
-def _json_schema(fn: Any) -> dict[str, object]:
+def _json_schema(fn: Callable[..., Any]) -> dict[str, object]:
     """Derive a minimal JSON schema from a function's signature.
 
     Handles `X | Y` unions (Python 3.10+), `typing.Union`,
@@ -206,7 +203,7 @@ def _json_schema(fn: Any) -> dict[str, object]:
     return {"type": "object", "properties": properties, "required": required}
 
 
-def _schema_type_for(annotation: Any) -> str:
+def _schema_type_for(annotation: type) -> str:
     """Map a Python type annotation to a JSON Schema type string."""
     origin = getattr(annotation, "__origin__", None)
     if origin:

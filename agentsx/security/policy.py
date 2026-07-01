@@ -9,8 +9,6 @@ Rules are evaluated with ``fnmatch`` against a combined
 ``"tool_name:{json_args}"`` pattern.  More specific rules match first.
 """
 
-from __future__ import annotations
-
 import json
 from dataclasses import dataclass
 from fnmatch import fnmatch
@@ -108,7 +106,7 @@ class ExecutionPolicy:
         return any(is_subpath(target, allowed) for allowed in self._allowed_dirs)
 
     @classmethod
-    def default(cls) -> ExecutionPolicy:
+    def default(cls) -> "ExecutionPolicy":
         """Factory: a sensible default policy.
 
         Read-only tools are allowed automatically.

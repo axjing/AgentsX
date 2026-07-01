@@ -4,8 +4,6 @@ Contains the display and command-handling logic for the
 interactive chat session.
 """
 
-from __future__ import annotations
-
 import logging
 
 from rich.console import Console

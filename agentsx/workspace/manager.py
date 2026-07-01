@@ -6,8 +6,6 @@ project context to the agent loop.
 Inspired by codex file-system and hermes project_tools.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from pathlib import Path
 

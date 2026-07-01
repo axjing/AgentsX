@@ -6,8 +6,6 @@ All session-management commands are defined here and dispatched from
 tuple so the caller can update its state.
 """
 
-from __future__ import annotations
-
 from agentsx.core.errors import SessionError
 from agentsx.session.store import SessionStore
 

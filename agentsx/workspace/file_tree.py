@@ -6,8 +6,6 @@ used for path completion and contextual awareness.
 Inspired by codex file-search and hermes file state.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -19,7 +17,7 @@ class FileTreeNode:
     name: str
     is_dir: bool
     path: str
-    children: list[FileTreeNode] = field(default_factory=list)
+    children: list["FileTreeNode"] = field(default_factory=list)
 
 
 # Default ignored patterns

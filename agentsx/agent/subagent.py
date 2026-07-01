@@ -5,8 +5,6 @@ Provider, message state, and tool subset.  Results are returned as plain
 text so the parent agent can consume them via a tool result.
 """
 
-from __future__ import annotations
-
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from uuid import uuid4

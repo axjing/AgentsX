@@ -1,7 +1,5 @@
 """Backward-compat alias. Import from agentsx.security.policy instead."""
 
-from __future__ import annotations
-
 import warnings
 
 from agentsx.security.policy import Decision, ExecutionPolicy, Rule

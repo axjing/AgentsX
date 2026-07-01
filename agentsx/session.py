@@ -1,7 +1,5 @@
 """Backward-compat alias. Import from agentsx.session instead."""
 
-from __future__ import annotations
-
 import warnings
 
 from agentsx.session.store import Session, SessionStore

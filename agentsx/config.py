@@ -4,8 +4,6 @@ All settings are read from ``AGENTSX_*`` environment variables.
 Uses Pydantic Settings for validation and type coercion.
 """
 
-from __future__ import annotations
-
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -81,6 +79,15 @@ class AgentsXSettings(BaseSettings):
 
     max_tool_output: int = 50000
     """Maximum characters returned by a single tool call (0 = no limit)."""
+
+    # ── Web Tools ──
+    web_search_url: str = "https://html.duckduckgo.com/html/"
+    """Web search engine URL. Reads from ``AGENTSX_WEB_SEARCH_URL``."""
+
+    web_user_agent: str = (
+        "Mozilla/5.0 (compatible; " "AgentsX/0.1.0; +https://github.com/agentsx)"
+    )
+    """User-Agent header for HTTP requests. Reads from ``AGENTSX_WEB_USER_AGENT``."""
 
 
 settings = AgentsXSettings()

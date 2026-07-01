@@ -1,7 +1,5 @@
 """High-level `Agent` class wrapping the loop for convenient use."""
 
-from __future__ import annotations
-
 from collections.abc import AsyncIterator
 
 from agentsx.agent.loop import run_agent_loop

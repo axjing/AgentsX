@@ -4,8 +4,6 @@ Inspired by hermes-agent `threat_patterns.py` and codex `execpolicy`.
 Blocks destructive commands and detects injection attempts.
 """
 
-from __future__ import annotations
-
 import re
 from dataclasses import dataclass
 from enum import Enum

@@ -1,7 +1,5 @@
 """Tests for conversation trajectory tracking."""
 
-from __future__ import annotations
-
 from agentsx.context.trajectory import Trajectory, TrajectoryEntry
 
 

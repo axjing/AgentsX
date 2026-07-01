@@ -6,8 +6,6 @@ Used to inject project context into the agent loop.
 Inspired by codex git-utils and hermes git integration.
 """
 
-from __future__ import annotations
-
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path

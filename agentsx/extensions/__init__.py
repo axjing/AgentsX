@@ -3,8 +3,6 @@
 Extensions observe and record; they never modify behaviour.
 """
 
-from __future__ import annotations
-
 from agentsx.extensions.api import (
     ALL_EVENTS,
     EVENT_ON_ERROR,

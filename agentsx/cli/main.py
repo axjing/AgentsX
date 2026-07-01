@@ -7,8 +7,6 @@ Usage::
     agentsx run "Summarize README.md"
 """
 
-from __future__ import annotations
-
 import asyncio
 import logging
 
@@ -93,26 +91,26 @@ def chat(  # noqa: B008
         "-w",
         help="Restrict file tools to this directory",
     ),
-    image: list[str] = typer.Option(
+    image: list[str] = typer.Option(  # noqa: B008
         [],
         "--image",
         "-i",
         help="Image path(s) to include in the first message",
     ),
-    audio: list[str] = typer.Option(
+    audio: list[str] = typer.Option(  # noqa: B008
         [],
         "--audio",
         "-a",
         help="Audio file path(s) to include in the first message",
     ),
-    video: list[str] = typer.Option(
+    video: list[str] = typer.Option(  # noqa: B008
         [],
         "--video",
         "-v",
         help="Video file path(s) to include in the first message",
     ),
 ) -> None:
-    """Start an interactive chat session with an AI agent."""  # noqa: B008
+    """Start an interactive chat session with an AI agent."""
     asyncio.run(
         _async_chat(
             model,

@@ -3,8 +3,6 @@
 All custom exceptions inherit from ``AgentsXError``.
 """
 
-from __future__ import annotations
-
 
 class AgentsXError(Exception):
     """Base exception for all AgentsX errors."""

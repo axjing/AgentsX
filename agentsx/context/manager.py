@@ -11,8 +11,6 @@ Usage::
         compacted = manager.compact(messages)
 """
 
-from __future__ import annotations
-
 from agentsx.context.compaction import compact_messages, should_compact
 from agentsx.context.summarizer import ContextSummarizer, SummaryResult
 from agentsx.context.trajectory import Trajectory

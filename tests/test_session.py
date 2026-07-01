@@ -1,7 +1,5 @@
 """Tests for session storage (``agentsx/session.py``)."""
 
-from __future__ import annotations
-
 from datetime import datetime, timezone
 from pathlib import Path
 

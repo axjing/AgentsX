@@ -4,8 +4,6 @@ Inspired by hermes-agent `path_security.py` and codex `file_safety.py`.
 Detects symlink attacks, path traversal, and workspace escape attempts.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from pathlib import Path
 

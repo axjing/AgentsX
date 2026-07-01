@@ -1,7 +1,5 @@
 """Tests for retry utilities."""
 
-from __future__ import annotations
-
 import pytest
 
 from agentsx.provider.retry import retry_async

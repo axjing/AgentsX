@@ -4,8 +4,6 @@ Three-tier decision model: ALLOW, PROMPT, FORBIDDEN.
 Plus path guards, command guards, and resource limits.
 """
 
-from __future__ import annotations
-
 from agentsx.security.command_guard import CommandCheckResult, CommandGuard, ThreatLevel
 from agentsx.security.path_guard import PathCheckResult, PathGuard
 from agentsx.security.policy import ExecutionPolicy, Rule

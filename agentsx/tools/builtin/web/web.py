@@ -1,11 +1,10 @@
 """Web fetch and search tools."""
 
-from __future__ import annotations
-
 import html
 import re
 import urllib.parse
 
+from agentsx.config import settings
 from agentsx.tools import tool
 
 
@@ -19,8 +18,7 @@ def _html_to_text(html_content: str) -> str:
         flags=re.IGNORECASE,
     )
     text = re.sub(
-        r'<a\s[^>]*href=["\']?([^"\'>\s]+)["\']?[^>]*>'
-        r"(.*?)</a>",
+        r'<a\s[^>]*href=["\']?([^"\'>\s]+)["\']?[^>]*>' r"(.*?)</a>",
         r"\2 (\1)",
         text,
         flags=re.IGNORECASE | re.DOTALL,
@@ -56,10 +54,7 @@ def tool_web_fetch(url: str, format: str = "text") -> str:  # noqa: A002
             timeout=30.0,
             follow_redirects=True,
             headers={
-                "User-Agent": (
-                    "Mozilla/5.0 (compatible; "
-                    "AgentsX/0.1.0; +https://github.com/agentsx)"
-                ),
+                "User-Agent": settings.web_user_agent,
                 "Accept": (
                     "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
                 ),
@@ -92,7 +87,7 @@ def tool_web_search(query: str, num_results: int = 5) -> str:
 
     num_results = min(num_results, 10)
     encoded = urllib.parse.quote(query)
-    url = f"https://html.duckduckgo.com/html/?q={encoded}"
+    url = f"{settings.web_search_url}?q={encoded}"
 
     try:
         response = httpx.get(
@@ -100,11 +95,7 @@ def tool_web_search(query: str, num_results: int = 5) -> str:
             timeout=15.0,
             follow_redirects=True,
             headers={
-                "User-Agent": (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/120.0 Safari/537.36"
-                ),
+                "User-Agent": settings.web_user_agent,
             },
         )
         response.raise_for_status()
@@ -119,8 +110,7 @@ def tool_web_search(query: str, num_results: int = 5) -> str:
         re.IGNORECASE | re.DOTALL,
     )
     snippet_pattern = re.compile(
-        r'<a[^>]+class="result__snippet"[^>]*>'
-        r"(.*?)</a>",
+        r'<a[^>]+class="result__snippet"[^>]*>' r"(.*?)</a>",
         re.IGNORECASE | re.DOTALL,
     )
 

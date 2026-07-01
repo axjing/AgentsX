@@ -12,8 +12,6 @@ base URL and API key. This covers most major providers:
 - vLLM, LM Studio, and other local servers
 """
 
-from __future__ import annotations
-
 import json
 from collections.abc import AsyncIterator
 from typing import Any
@@ -29,7 +27,7 @@ from agentsx.core.types import (
     ToolCall,
     ToolCallStreamEvent,
 )
-from agentsx.provider import Provider, register_provider
+from agentsx.provider import Model, Provider, register_provider
 
 # Provider-specific API key and base URL mappings
 _PROVIDER_KEYS: dict[str, tuple[str, str]] = {
@@ -79,7 +77,7 @@ class GenericProvider(Provider):
 
     def __init__(
         self,
-        model: Any,
+        model: Model,
         api_key: str | None = None,
         api_base: str | None = None,
         **kwargs: object,

@@ -1,7 +1,5 @@
 """Tests for context compaction utility."""
 
-from __future__ import annotations
-
 from agentsx.context.compaction import (
     compact_messages,
     estimate_message_tokens,

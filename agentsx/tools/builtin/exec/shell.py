@@ -1,7 +1,5 @@
 """Shell command execution tool."""
 
-from __future__ import annotations
-
 import asyncio
 import subprocess
 

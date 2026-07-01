@@ -5,11 +5,8 @@ The parent agent interacts with sub-agents exclusively through the
 ``spawn_agent`` tool, which delegates to the orchestrator.
 """
 
-from __future__ import annotations
-
 import time
 from dataclasses import dataclass
-from typing import Any
 
 from agentsx.agent.subagent import SubAgentConfig, SubAgentRuntime
 
@@ -60,7 +57,7 @@ class Orchestrator:
         config: SubAgentConfig,
         prompt: str,
         current_depth: int = 0,
-        **kwargs: Any,  # noqa: ARG002
+        **kwargs: object,  # noqa: ARG002
     ) -> str:
         """Spawn a sub-agent and wait for its result.
 

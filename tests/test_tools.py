@@ -1,7 +1,5 @@
 """Tests for tool system: ToolSpec, ToolRegistry, decorator, built-ins."""
 
-from __future__ import annotations
-
 import tempfile
 from pathlib import Path
 
@@ -32,9 +30,9 @@ class TestToolSpec:
 
         openai_def = spec.to_openai_format()
         assert openai_def["type"] == "function"
-        func: dict[str, object] = openai_def["function"]
-        assert func["name"] == "dummy"
-        params: dict[str, object] = func["parameters"]
+        func = openai_def["function"]
+        assert func["name"] == "dummy"  # type: ignore[index]
+        params = func["parameters"]  # type: ignore[index]
         assert "arg1" in params["properties"]
 
     @pytest.mark.asyncio
@@ -83,7 +81,7 @@ class TestToolSpec:
             ),
         )
         tools = registry.to_openai_tools()
-        names = [t["function"]["name"] for t in tools]
+        names = [t["function"]["name"] for t in tools]  # type: ignore[index]
         assert "visible" in names
         assert "hidden" not in names
 
@@ -133,8 +131,8 @@ class TestToolRegistry:
         registry.register(spec)
         tools = registry.to_openai_tools()
         assert len(tools) == 1
-        func: dict[str, object] = tools[0]["function"]
-        assert func["name"] == "greet"
+        func = tools[0]["function"]
+        assert func["name"] == "greet"  # type: ignore[index]
 
 
 # ── Decorator ────────────────────────────────────────────────────────

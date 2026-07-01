@@ -1,7 +1,5 @@
 """Tests for command guard."""
 
-from __future__ import annotations
-
 from agentsx.security.command_guard import (
     CommandGuard,
     ThreatLevel,

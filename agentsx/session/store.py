@@ -16,8 +16,6 @@ Design:
     - No database, no migrations
 """
 
-from __future__ import annotations
-
 import json
 import shutil
 from dataclasses import dataclass

@@ -4,8 +4,6 @@ Provides a simple, non-invasive retry wrapper that can be applied
 to any async function. Uses exponential backoff with jitter.
 """
 
-from __future__ import annotations
-
 import asyncio
 import logging
 import random

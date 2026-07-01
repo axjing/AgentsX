@@ -11,8 +11,6 @@ Design:
 Inspired by Pi branch-summarization and hermes context_compressor.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 
 from agentsx.core.types import AgentMessage, MessageRole

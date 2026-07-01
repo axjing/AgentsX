@@ -4,8 +4,6 @@ Provides workspace lifecycle management, git status tracking,
 and file tree indexing.
 """
 
-from __future__ import annotations
-
 from agentsx.workspace.file_tree import FileTreeIndex, FileTreeNode
 from agentsx.workspace.git import GitStatus, GitWatcher
 from agentsx.workspace.manager import WorkspaceInfo, WorkspaceManager

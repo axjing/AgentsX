@@ -4,8 +4,6 @@ All messages, tool calls, events, and security decisions are defined here.
 Provider-agnostic — no module should import provider-specific types.
 """
 
-from __future__ import annotations
-
 import base64
 import json
 from dataclasses import dataclass, field
@@ -43,15 +41,15 @@ class ContentPart:
     detail: str = "auto"
 
     @classmethod
-    def make_text(cls, content: str) -> ContentPart:
+    def make_text(cls, content: str) -> "ContentPart":
         return cls(type=ContentType.TEXT, text=content)
 
     @classmethod
-    def make_image_url(cls, url: str, detail: str = "auto") -> ContentPart:
+    def make_image_url(cls, url: str, detail: str = "auto") -> "ContentPart":
         return cls(type=ContentType.IMAGE_URL, image_url=url, detail=detail)
 
     @classmethod
-    def make_image_file(cls, path: str, detail: str = "auto") -> ContentPart:
+    def make_image_file(cls, path: str, detail: str = "auto") -> "ContentPart":
         import base64
 
         file_path = Path(path)
@@ -74,12 +72,12 @@ class ContentPart:
         )
 
     @classmethod
-    def make_audio_url(cls, url: str) -> ContentPart:
+    def make_audio_url(cls, url: str) -> "ContentPart":
         """Create an audio URL content part."""
         return cls(type=ContentType.AUDIO_URL, audio_url=url)
 
     @classmethod
-    def make_audio_file(cls, path: str) -> ContentPart:
+    def make_audio_file(cls, path: str) -> "ContentPart":
         """Create an audio content part from a local file (base64)."""
         file_path = Path(path)
         data = file_path.read_bytes()
@@ -101,12 +99,12 @@ class ContentPart:
         )
 
     @classmethod
-    def make_video_url(cls, url: str) -> ContentPart:
+    def make_video_url(cls, url: str) -> "ContentPart":
         """Create a video URL content part."""
         return cls(type=ContentType.VIDEO_URL, video_url=url)
 
     @classmethod
-    def make_video_file(cls, path: str) -> ContentPart:
+    def make_video_file(cls, path: str) -> "ContentPart":
         """Create a video content part from a local file (base64)."""
         file_path = Path(path)
         data = file_path.read_bytes()
@@ -442,7 +440,6 @@ AgentEvent = (
 )
 """Union type for all agent events. Consumers use ``isinstance()`` to dispatch."""
 
-
 # ── Provider Stream Events ──────────────────────────────────
 
 
@@ -462,7 +459,6 @@ class ToolCallStreamEvent:
 
 StreamEvent = TextStreamEvent | ToolCallStreamEvent
 """Items yielded by ``Provider.stream()`` — text tokens or complete tool calls."""
-
 
 # ── Security ──────────────────────────────────────────────────
 

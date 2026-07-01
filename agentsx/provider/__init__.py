@@ -5,8 +5,6 @@ Each provider implements the ``Provider`` ABC with ``stream()`` and
 right provider by model name.
 """
 
-from __future__ import annotations
-
 import asyncio
 import importlib
 import logging
@@ -19,6 +17,7 @@ from typing import Any
 from agentsx.config import get_settings
 from agentsx.core.errors import ProviderError, RetryExhaustedError
 from agentsx.core.types import AgentMessage, StreamEvent
+from agentsx.tools import ToolRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +44,7 @@ class Provider(ABC):
     """
 
     model: Model
-    tools: Any = None
+    tools: ToolRegistry | None = None
     """Optional ToolRegistry. Set before calling ``stream()`` to expose
     tools to the LLM."""
 
@@ -187,7 +186,8 @@ def create_provider(
         3. Prefix matching: ``"gpt-4o"`` -> ``openai``
 
     Args:
-        model_name: Model identifier (e.g. ``"gpt-4o"`` or ``"gemini/gemini-2.0-flash"``).
+        model_name: Model identifier (e.g. ``"gpt-4o"``
+            or ``"gemini/gemini-2.0-flash"``).
         api_key: API key for the provider.
         api_base: Optional custom API base URL.
         **kwargs: Additional provider-specific arguments.

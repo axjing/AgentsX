@@ -6,8 +6,6 @@ policy decisions. Enables debugging, replay, and context-aware compaction.
 Inspired by hermes-agent trajectory.py and codex message-history.
 """
 
-from __future__ import annotations
-
 import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -34,7 +32,7 @@ class TrajectoryEntry:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> TrajectoryEntry:
+    def from_dict(cls, data: dict[str, Any]) -> "TrajectoryEntry":
         return cls(
             step=data["step"],
             action=data["action"],
@@ -138,7 +136,7 @@ class Trajectory:
         return "\n".join(json.dumps(e.to_dict()) for e in self.entries)
 
     @classmethod
-    def from_jsonl(cls, data: str, session_id: str = "") -> Trajectory:
+    def from_jsonl(cls, data: str, session_id: str = "") -> "Trajectory":
         traj = cls(session_id=session_id)
         for line in data.strip().split("\n"):
             if line.strip():

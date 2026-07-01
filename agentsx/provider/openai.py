@@ -1,7 +1,5 @@
 """OpenAI / Azure OpenAI provider implementation."""
 
-from __future__ import annotations
-
 import json
 from collections.abc import AsyncIterator
 from typing import Any
@@ -17,7 +15,7 @@ from agentsx.core.types import (
     ToolCall,
     ToolCallStreamEvent,
 )
-from agentsx.provider import Provider, register_provider
+from agentsx.provider import Model, Provider, register_provider
 
 
 class OpenAIProvider(Provider):
@@ -29,7 +27,7 @@ class OpenAIProvider(Provider):
 
     def __init__(
         self,
-        model: Any,
+        model: Model,
         api_key: str | None = None,
         api_base: str | None = None,
         **kwargs: object,

@@ -2,10 +2,8 @@
 and orchestrator (``agentsx/orchestrator.py``).
 """
 
-from __future__ import annotations
-
-from collections.abc import AsyncIterator
-from unittest.mock import AsyncMock, patch
+from collections.abc import AsyncIterator, Generator
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -74,7 +72,7 @@ class TestSubAgentRuntime:
     """SubAgentRuntime — isolated agent execution."""
 
     @pytest.fixture(autouse=True)
-    def _mock_provider_factory(self) -> None:
+    def _mock_provider_factory(self) -> Generator[None, None, None]:
         """Patch create_provider to avoid real provider imports."""
         import agentsx.agent.subagent as subagent_mod
 
@@ -177,7 +175,7 @@ class TestOrchestrator:
         class _HangingRuntime:
             """A mock sub-agent that never completes."""
 
-            def __init__(self, _cfg: SubAgentConfig) -> None:
+            def __init__(self, _cfg: SubAgentConfig, **kwargs: object) -> None:
                 self.id = "hanging-agent"
 
             async def run(self, _prompt: str) -> str:
@@ -201,7 +199,7 @@ class TestOrchestrator:
     @patch("agentsx.agent.subagent.create_provider")
     def test_sub_agent_record_defaults(
         self,
-        mock_factory: object,
+        mock_factory: MagicMock,
     ) -> None:
         from agentsx.core.types import StreamEvent, TextStreamEvent
         from agentsx.provider import Model, Provider

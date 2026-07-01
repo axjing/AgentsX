@@ -1,7 +1,5 @@
 """Backward-compat alias. Import from agentsx.extensions instead."""
 
-from __future__ import annotations
-
 import warnings
 
 from agentsx.extensions.api import (

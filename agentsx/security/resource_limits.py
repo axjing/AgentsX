@@ -5,8 +5,6 @@ Inspired by codex `tool_output_limits.py` and hermes-agent
 `tool_result_storage.py`.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 
 

@@ -1,7 +1,5 @@
 """Global test configuration and fixtures."""
 
-from __future__ import annotations
-
 from collections.abc import AsyncIterator
 from unittest.mock import AsyncMock
 

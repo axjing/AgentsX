@@ -1,7 +1,5 @@
 """Tests for path security guard."""
 
-from __future__ import annotations
-
 import tempfile
 from pathlib import Path
 

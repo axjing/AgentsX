@@ -4,8 +4,6 @@ Provides token-count based compaction, trajectory tracking,
 and LLM-driven summarization.
 """
 
-from __future__ import annotations
-
 from agentsx.context.compaction import (
     compact_messages,
     estimate_message_tokens,

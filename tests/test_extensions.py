@@ -1,7 +1,6 @@
 """Tests for extension system (``agentsx/extensions.py``)."""
 
-from __future__ import annotations
-
+from collections.abc import AsyncIterator
 from unittest.mock import patch
 
 import pytest
@@ -9,6 +8,7 @@ import pytest
 from agentsx.core.types import (
     AgentMessage,
     MessageRole,
+    StreamEvent,
     TextStreamEvent,
     ToolCall,
     ToolCallStreamEvent,
@@ -167,7 +167,7 @@ class TestExtensionIntegration:
 
         from collections.abc import AsyncIterator
 
-        from agentsx.core.types import TextStreamEvent, ToolCallStreamEvent
+        from agentsx.core.types import ToolCallStreamEvent
 
         async def stream(
             messages: list[AgentMessage],
@@ -229,7 +229,9 @@ class TestExtensionIntegration:
         provider.stream.return_value = AsyncMock()
         provider.stream.return_value.__aiter__.return_value = iter([])
 
-        async def empty_stream(messages):
+        async def empty_stream(
+            messages: list[AgentMessage],
+        ) -> AsyncIterator[StreamEvent]:
             return
             yield
 

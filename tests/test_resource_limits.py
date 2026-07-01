@@ -1,7 +1,5 @@
 """Tests for resource limits."""
 
-from __future__ import annotations
-
 from agentsx.security.resource_limits import ResourceLimits, get_limits
 
 

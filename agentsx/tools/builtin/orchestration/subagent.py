@@ -7,9 +7,7 @@ Note: imports from ``agentsx.agent.subagent`` and ``agentsx.orchestrator``
 are lazy (inside the function body) to avoid a circular import chain.
 """
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from agentsx.tools import tool
 
@@ -17,17 +15,17 @@ if TYPE_CHECKING:
     from agentsx.orchestrator import Orchestrator
 
 # Module-level orchestrator singleton — shared across tool calls.
-_orchestra: Any = None
+_orchestra: object = None
 
 
-def _get_orchestra() -> Orchestrator:
+def _get_orchestra() -> "Orchestrator":
     """Get or create the global orchestrator singleton."""
     from agentsx.orchestrator import Orchestrator as _Orc  # noqa: PLC0415
 
     global _orchestra  # noqa: PLW0603
     if _orchestra is None:
         _orchestra = _Orc(max_active=5)
-    return _orchestra  # type: ignore[no-any-return]
+    return _orchestra  # type: ignore[return-value]
 
 
 @tool(
@@ -62,8 +60,9 @@ async def spawn_agent(
         The sub-agent's final response as text.
     """
     from agentsx.agent.subagent import SubAgentConfig  # noqa: PLC0415
+    from agentsx.config import settings
 
-    resolved_model = model_name or "gpt-4o"
+    resolved_model = model_name or settings.model_name
 
     config = SubAgentConfig(
         model_name=resolved_model,

@@ -13,8 +13,6 @@ All tools are exposed via the ``ALL_TOOLS`` constant for easy registration::
     registry.register_all(*ALL_TOOLS)
 """
 
-from __future__ import annotations
-
 from agentsx.tools.builtin.exec.shell import tool_bash
 from agentsx.tools.builtin.orchestration.subagent import spawn_agent
 from agentsx.tools.builtin.read.filesystem import (

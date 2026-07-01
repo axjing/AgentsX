@@ -12,8 +12,6 @@ Design:
       (Anthropic requires user as first message, single system only)
 """
 
-from __future__ import annotations
-
 from agentsx.core.types import AgentMessage, MessageRole
 
 # Average characters per token (rough estimate for most models)

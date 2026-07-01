@@ -89,7 +89,7 @@ These design principles are not hard-and-fast rules, but hard-won choices and an
 - Virtual environment: `.venv` (project-local, via `uv venv`).
 - Activate before running/linting/committing: `.venv\Scripts\activate` (Windows) or `source .venv/bin/activate` (Unix).
 - Manage dependencies with `uv sync`, `uv add`, `uv remove`.
-- Python 3.10 minimum. No `StrEnum` — use `(str, Enum)` mixin. `from __future__ import annotations` enables `X | Y` in annotations.
+- Python 3.10 minimum. No `StrEnum` — use `(str, Enum)` mixin. 
 
 ### 3.2 TypeScript/JavaScript
 Not yet in use. When added, depend on `package.json` + `package-lock.json` consistency.
@@ -141,7 +141,7 @@ uv run python -m pytest -v
 - All at file top. Inline/dynamic/`__import__` prohibited.
 - No wildcard (`from X import *`).
 - Order: Standard Library → Third-party → Project Internal → Relative.
-- `from __future__ import annotations` in every file.
+- No `from __future__` imports (project requires Python 3.10+, which natively supports `X | Y` union syntax via PEP 604).
 
 ### 5.4 Docstrings
 - **Google-style only**. Sphinx (`:param:`, `:return:`) prohibited.

@@ -1,7 +1,5 @@
 """Tests for security policy (``agentsx/security.py``)."""
 
-from __future__ import annotations
-
 from collections.abc import AsyncIterator
 
 import pytest
@@ -28,7 +26,7 @@ class _MockProvider(Provider):
 
     def __init__(self) -> None:
         self.model = Model(id="test", provider_name="test", max_tokens=256)
-        self.tools: object = None
+        self.tools = None
 
     async def stream(
         self,
