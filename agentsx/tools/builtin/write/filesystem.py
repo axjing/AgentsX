@@ -5,7 +5,7 @@ from pathlib import Path
 from agentsx.tools import tool
 
 
-@tool(description="Write content to a file (overwrite or create).")
+@tool(description="Write content to a file (overwrite or create).", toolset="write")
 def tool_file_write(path: str, content: str) -> str:
     filepath = Path(path)
     filepath.parent.mkdir(parents=True, exist_ok=True)
@@ -13,7 +13,10 @@ def tool_file_write(path: str, content: str) -> str:
     return f"Wrote {written} bytes to {path}"
 
 
-@tool(description="Edit an existing file by performing an exact-text replacement.")
+@tool(
+    description="Edit an existing file by performing an exact-text replacement.",
+    toolset="write",
+)
 def tool_file_edit(
     path: str,
     old_string: str,

@@ -27,31 +27,7 @@ from agentsx.core.types import (
     ToolCall,
     ToolCallStreamEvent,
 )
-from agentsx.provider import Model, Provider, register_provider
-
-# Provider-specific API key and base URL mappings
-_PROVIDER_KEYS: dict[str, tuple[str, str]] = {
-    "gemini": ("gemini_api_key", ""),
-    "deepseek": ("deepseek_api_key", ""),
-    "groq": ("groq_api_key", ""),
-    "openrouter": ("openrouter_api_key", ""),
-    "ollama": ("", "ollama_api_base"),
-    "vllm": ("vllm_api_key", "vllm_api_base"),
-    "sglang": ("sglang_api_key", "sglang_api_base"),
-    "custom": ("custom_api_key", "custom_api_base"),
-}
-
-# Default base URLs for providers
-_PROVIDER_BASE_URLS: dict[str, str] = {
-    "gemini": "https://generativelanguage.googleapis.com/v1beta/openai/",
-    "deepseek": "https://api.deepseek.com/v1",
-    "groq": "https://api.groq.com/openai/v1",
-    "openrouter": "https://openrouter.ai/api/v1",
-    "ollama": "http://localhost:11434/v1",
-    "vllm": "http://localhost:8000/v1",
-    "sglang": "http://localhost:30000/v1",
-    "custom": "",
-}
+from agentsx.provider import Model, Provider, get_profile, register_provider
 
 
 class GenericProvider(Provider):
@@ -91,12 +67,12 @@ class GenericProvider(Provider):
         if self._api_key:
             return self._api_key
         provider_name = self.model.provider_name
-        key_attr, _ = _PROVIDER_KEYS.get(provider_name, ("", ""))
-        if key_attr:
-            key = getattr(settings, key_attr, "")
-            if key:
-                return key
-        # Fallback to generic API key
+        profile = get_profile(provider_name)
+        if profile and profile.env_api_key:
+            env_key = profile.env_api_key.lower()
+            key_val = getattr(settings, env_key, "")
+            if key_val:
+                return key_val
         return settings.api_key
 
     def _resolve_api_base(self) -> str:
@@ -104,16 +80,15 @@ class GenericProvider(Provider):
         if self._api_base:
             return self._api_base
         provider_name = self.model.provider_name
-        _, base_attr = _PROVIDER_KEYS.get(provider_name, ("", ""))
-        if base_attr:
-            base = getattr(settings, base_attr, "")
-            if base:
-                return base
-        # Use default or fallback
-        return _PROVIDER_BASE_URLS.get(
-            provider_name,
-            settings.api_base or "https://api.openai.com/v1",
-        )
+        profile = get_profile(provider_name)
+        if profile and profile.env_api_base:
+            env_base = profile.env_api_base.lower()
+            base_val = getattr(settings, env_base, "")
+            if base_val:
+                return base_val
+        if profile and profile.base_url:
+            return profile.base_url
+        return settings.api_base or "https://api.openai.com/v1"
 
     async def stream(
         self,
@@ -131,10 +106,10 @@ class GenericProvider(Provider):
         headers: dict[str, str] = {
             "Content-Type": "application/json",
         }
+        profile = get_profile(self.model.provider_name)
+        if profile:
+            headers.update(profile.extra_headers)
         if api_key:
-            if self.model.provider_name == "openrouter":
-                headers["HTTP-Referer"] = "https://agentsx.local"
-                headers["X-Title"] = "AgentsX"
             headers["Authorization"] = f"Bearer {api_key}"
 
         payload: dict[str, Any] = {

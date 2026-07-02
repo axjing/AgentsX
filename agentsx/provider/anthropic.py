@@ -41,11 +41,12 @@ class AnthropicProvider(Provider):
         messages: list[AgentMessage],
     ) -> AsyncIterator[StreamEvent]:
         settings = get_settings()
+        profile = self.profile
         api_key = self._api_key or settings.anthropic_api_key or settings.api_key
         api_base = (
             self._api_base
             or settings.anthropic_api_base
-            or "https://api.anthropic.com/v1"
+            or (profile.base_url if profile else "https://api.anthropic.com/v1")
         )
         if not api_key:
             raise ProviderError(
@@ -55,9 +56,10 @@ class AnthropicProvider(Provider):
 
         headers: dict[str, str] = {
             "x-api-key": api_key,
-            "anthropic-version": "2023-06-01",
             "Content-Type": "application/json",
         }
+        if profile:
+            headers.update(profile.extra_headers)
         payload: dict[str, Any] = {
             "model": self.model.id,
             "messages": self.format_messages(messages),

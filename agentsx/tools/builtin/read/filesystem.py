@@ -5,7 +5,7 @@ from pathlib import Path
 from agentsx.tools import tool
 
 
-@tool(description="Read a file from the local filesystem.")
+@tool(description="Read a file from the local filesystem.", toolset="read")
 def tool_file_read(path: str, offset: int = 0, limit: int = 0) -> str:
     """Read the contents of a file.
 
@@ -33,7 +33,7 @@ def tool_file_read(path: str, offset: int = 0, limit: int = 0) -> str:
     return "\n".join(f"{i}: {line}" for i, line in enumerate(lines, start=start_num))
 
 
-@tool(description="Search for files matching a glob pattern.")
+@tool(description="Search for files matching a glob pattern.", toolset="read")
 def tool_file_glob(pattern: str, root: str = ".") -> str:
     matches = sorted(Path(root).glob(pattern))
     if not matches:
@@ -41,7 +41,7 @@ def tool_file_glob(pattern: str, root: str = ".") -> str:
     return "\n".join(str(m) for m in matches)
 
 
-@tool(description="Search file contents using a regular expression.")
+@tool(description="Search file contents using a regular expression.", toolset="read")
 def tool_file_grep(
     pattern: str,
     include: str = "*.py",

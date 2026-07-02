@@ -43,7 +43,7 @@ async def _run_command(
     )
 
 
-@tool(description="Execute a shell command and return its output.")
+@tool(description="Execute a shell command and return its output.", toolset="exec")
 async def tool_bash(
     command: str,
     description: str = "",

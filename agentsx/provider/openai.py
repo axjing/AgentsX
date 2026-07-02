@@ -41,9 +41,12 @@ class OpenAIProvider(Provider):
         messages: list[AgentMessage],
     ) -> AsyncIterator[StreamEvent]:
         settings = get_settings()
+        profile = self.profile
         api_key = self._api_key or settings.openai_api_key or settings.api_key
         api_base = (
-            self._api_base or settings.openai_api_base or "https://api.openai.com/v1"
+            self._api_base
+            or settings.openai_api_base
+            or (profile.base_url if profile else "https://api.openai.com/v1")
         )
         if not api_key:
             raise ProviderError(
@@ -55,6 +58,8 @@ class OpenAIProvider(Provider):
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         }
+        if profile:
+            headers.update(profile.extra_headers)
         payload: dict[str, Any] = {
             "model": self.model.id,
             "messages": self.format_messages(messages),

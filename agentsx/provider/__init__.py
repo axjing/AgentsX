@@ -17,6 +17,7 @@ from typing import Any
 from agentsx.config import get_settings
 from agentsx.core.errors import ProviderError, RetryExhaustedError
 from agentsx.core.types import AgentMessage, StreamEvent
+from agentsx.provider.profile import ProviderProfile, get_profile, resolve_provider_name
 from agentsx.tools import ToolRegistry
 
 logger = logging.getLogger(__name__)
@@ -45,12 +46,13 @@ class Provider(ABC):
 
     model: Model
     tools: ToolRegistry | None = None
-    """Optional ToolRegistry. Set before calling ``stream()`` to expose
-    tools to the LLM."""
+    profile: ProviderProfile | None = None
+    """Optional ProviderProfile with declarative metadata."""
 
     def __init__(self, model: Model) -> None:
         self.model = model
         self.tools = None
+        self.profile = get_profile(model.provider_name)
 
     @abstractmethod
     def stream(
@@ -105,7 +107,7 @@ class Provider(ABC):
             try:
                 async for event in self.stream(messages):
                     yield event
-                return  # Success
+                return
             except ProviderError as exc:
                 if self._is_retryable(exc) and attempt < max_retries:
                     delay = self._calc_delay(attempt, base_delay, max_delay)
@@ -161,6 +163,24 @@ class Provider(ABC):
         jitter = delay * 0.5 * random.random()
         return float(delay + jitter)
 
+    def resolve_api_key(self) -> str:
+        """Resolve API key from constructor arg, env var, or settings."""
+        return ""
+
+    def resolve_api_base(self) -> str:
+        """Resolve API base URL from constructor arg, env var, or settings."""
+        return ""
+
+
+__all__ = [
+    "Model",
+    "Provider",
+    "ProviderProfile",
+    "create_provider",
+    "get_profile",
+    "register_provider",
+    "resolve_provider_name",
+]
 
 # ── Provider Registry ──────────────────────────────────────────────────
 
@@ -181,9 +201,9 @@ def create_provider(
     """Factory: create a Provider instance from a model name.
 
     Model name resolution (in order of priority):
-        1. Slash notation: ``"gemini/gemini-2.0-flash"`` -> ``gemini``
-        2. Explicit mapping: ``"deepseek-chat"`` -> ``deepseek``
-        3. Prefix matching: ``"gpt-4o"`` -> ``openai``
+        1. Slash notation: ``"gemini/gemini-2.0-flash"`` → provider
+        2. Model alias / prefix via :func:`resolve_provider_name`
+        3. Iterate registered providers
 
     Args:
         model_name: Model identifier (e.g. ``"gpt-4o"``
@@ -198,7 +218,6 @@ def create_provider(
     Raises:
         ProviderError: If no provider is registered for the model.
     """
-    # Load all provider modules
     for _mod in (
         "agentsx.provider.openai",
         "agentsx.provider.anthropic",
@@ -209,7 +228,6 @@ def create_provider(
         except ImportError:
             pass
 
-    # Extract clean model ID (remove provider prefix if slash notation)
     if "/" in model_name:
         provider_hint = model_name.split("/")[0]
         clean_model = model_name.split("/", 1)[1]
@@ -224,7 +242,6 @@ def create_provider(
         init_kwargs["api_base"] = api_base
     init_kwargs.update(kwargs)
 
-    # Try explicit provider hint first
     if provider_hint and provider_hint in _PROVIDER_REGISTRY:
         resolved_kwargs = _resolve_provider_kwargs(provider_hint, init_kwargs)
         return _PROVIDER_REGISTRY[provider_hint](
@@ -232,8 +249,7 @@ def create_provider(
             **resolved_kwargs,
         )
 
-    # Try explicit mapping
-    resolved = _resolve_provider_name(model_name)
+    resolved = resolve_provider_name(model_name)
     if resolved and resolved in _PROVIDER_REGISTRY:
         resolved_kwargs = _resolve_provider_kwargs(resolved, init_kwargs)
         return _PROVIDER_REGISTRY[resolved](
@@ -241,10 +257,19 @@ def create_provider(
             **resolved_kwargs,
         )
 
-    # Try prefix matching
     for name, cls in _PROVIDER_REGISTRY.items():
-        prefix = _provider_prefix(name)
+        profile = get_profile(name)
+        prefix = profile.model_prefix if profile else ""
         if prefix and model_name.startswith(prefix):
+            resolved_kwargs = _resolve_provider_kwargs(name, init_kwargs)
+            return cls(
+                model=Model(id=clean_model, provider_name=name),
+                **resolved_kwargs,
+            )
+
+    # Fallback: check if the model name starts with any registered provider name
+    for name, cls in _PROVIDER_REGISTRY.items():
+        if name and model_name.startswith(name):
             resolved_kwargs = _resolve_provider_kwargs(name, init_kwargs)
             return cls(
                 model=Model(id=clean_model, provider_name=name),
@@ -259,106 +284,27 @@ def _resolve_provider_kwargs(
     provider_name: str,
     init_kwargs: dict[str, object],
 ) -> dict[str, object]:
-    """Apply generic api_key/api_base fallback for a provider.
-
-    When no provider-specific key is configured, the generic
-    `api_key` and `api_base` settings are used as fallback.
-    """
+    """Apply profile-aware api_key/api_base fallback for a provider."""
     settings = get_settings()
+    profile = get_profile(provider_name)
     resolved = dict(init_kwargs)
+
     if not resolved.get("api_key"):
-        key_attr = f"{provider_name}_api_key"
-        generic_key = getattr(settings, key_attr, "") or settings.api_key
-        resolved["api_key"] = generic_key
+        if profile and profile.env_api_key:
+            env_key = profile.env_api_key.lower()
+            key_val = getattr(settings, env_key, "") or settings.api_key
+            resolved["api_key"] = key_val
+        else:
+            key_attr = f"{provider_name}_api_key"
+            resolved["api_key"] = getattr(settings, key_attr, "") or settings.api_key
+
     if not resolved.get("api_base"):
-        base_attr = f"{provider_name}_api_base"
-        generic_base = getattr(settings, base_attr, "") or settings.api_base
-        resolved["api_base"] = generic_base
+        if profile and profile.env_api_base:
+            env_base = profile.env_api_base.lower()
+            base_val = getattr(settings, env_base, "") or settings.api_base
+            resolved["api_base"] = base_val or profile.base_url
+        else:
+            base_attr = f"{provider_name}_api_base"
+            resolved["api_base"] = getattr(settings, base_attr, "") or settings.api_base
+
     return resolved
-
-
-def _provider_prefix(provider_name: str) -> str:
-    """Map provider names to model name prefixes."""
-    mapping = {
-        "openai": "gpt-",
-        "anthropic": "claude-",
-        "gemini": "gemini-",
-        "deepseek": "deepseek-",
-        "groq": "llama-|mixtral-",
-        "openrouter": "",
-        "ollama": "",
-        "vllm": "",
-        "sglang": "",
-        "custom": "",
-    }
-    return mapping.get(provider_name, provider_name)
-
-
-# Model name to provider mapping (explicit overrides)
-_MODEL_TO_PROVIDER: dict[str, str] = {
-    # Google Gemini
-    "gemini-2.0-flash": "gemini",
-    "gemini-2.0-flash-lite": "gemini",
-    "gemini-2.5-pro": "gemini",
-    "gemini-2.5-flash": "gemini",
-    "gemini-1.5-pro": "gemini",
-    "gemini-1.5-flash": "gemini",
-    # DeepSeek
-    "deepseek-chat": "deepseek",
-    "deepseek-coder": "deepseek",
-    "deepseek-reasoner": "deepseek",
-    # Groq
-    "llama-3.3-70b-versatile": "groq",
-    "llama-3.1-8b-instant": "groq",
-    "mixtral-8x7b-32768": "groq",
-    # Common model aliases
-    "gpt-4o": "openai",
-    "gpt-4o-mini": "openai",
-    "o1": "openai",
-    "o3-mini": "openai",
-    "claude-sonnet-4-20250514": "anthropic",
-    "claude-opus-4-20250414": "anthropic",
-    "claude-haiku-4-20250414": "anthropic",
-    # vLLM common model IDs
-    "meta-llama/Llama-3.1-70B-Instruct": "vllm",
-    "meta-llama/Llama-3.1-8B-Instruct": "vllm",
-    "Qwen/Qwen2.5-72B-Instruct": "vllm",
-    "Qwen/Qwen2.5-Coder-32B-Instruct": "vllm",
-    "mistralai/Mixtral-8x7B-Instruct-v0.1": "vllm",
-}
-
-
-def _resolve_provider_name(model_name: str) -> str | None:
-    """Resolve a model name to a provider name.
-
-    Supports:
-    - Explicit slash notation: "gemini/gemini-2.0-flash" -> "gemini"
-    - Explicit mapping: "deepseek-chat" -> "deepseek"
-    - Prefix matching: "gpt-4o" -> "openai"
-    """
-    # Slash notation takes highest priority
-    if "/" in model_name:
-        return model_name.split("/")[0]
-
-    # Explicit mapping
-    if model_name in _MODEL_TO_PROVIDER:
-        return _MODEL_TO_PROVIDER[model_name]
-
-    # Prefix matching
-    _prefixes = {
-        "openai": "gpt-",
-        "anthropic": "claude-",
-        "gemini": "gemini-",
-        "deepseek": "deepseek-",
-        "groq": "llama-",
-        "openrouter": "",
-        "ollama": "",
-        "vllm": "",
-        "sglang": "",
-        "custom": "",
-    }
-    for name, prefix in _prefixes.items():
-        if prefix and model_name.startswith(prefix):
-            return name
-
-    return None

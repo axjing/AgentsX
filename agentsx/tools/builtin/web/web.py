@@ -35,7 +35,7 @@ def _html_to_text(html_content: str) -> str:
     return text.strip()
 
 
-@tool(description="Fetch content from a URL and return it as text.")
+@tool(description="Fetch content from a URL and return it as text.", toolset="web")
 def tool_web_fetch(url: str, format: str = "text") -> str:  # noqa: A002
     """Fetch a URL and return its content.
 
@@ -72,7 +72,7 @@ def tool_web_fetch(url: str, format: str = "text") -> str:  # noqa: A002
     return text[:100000]
 
 
-@tool(description="Search the web for information.")
+@tool(description="Search the web for information.", toolset="web")
 def tool_web_search(query: str, num_results: int = 5) -> str:
     """Search the web and return formatted results.
 

@@ -45,6 +45,10 @@ class AgentsXSettings(BaseSettings):
     session_dir: str = ""
     """Session storage directory. Empty = ``~/.agentsx/sessions/``."""
 
+    # ── Discovery ──
+    discovery_dir: str = ""
+    """Base directory for command/skill discovery. Empty = ``~/.agentsx/``."""
+
     # ── Security ──
     policy_default: str = "prompt"
     """Default security policy: ``"allow"``, ``"prompt"``, or ``"forbidden"``."""
@@ -62,6 +66,36 @@ class AgentsXSettings(BaseSettings):
 
     anthropic_api_base: str = ""
     """Anthropic API base URL. Reads from ``AGENTSX_ANTHROPIC_API_BASE``."""
+
+    # ── Provider: Gemini ──
+    gemini_api_key: str = ""
+    """Gemini API key. Reads from ``AGENTSX_GEMINI_API_KEY``."""
+
+    # ── Provider: DeepSeek ──
+    deepseek_api_key: str = ""
+    """DeepSeek API key. Reads from ``AGENTSX_DEEPSEEK_API_KEY``."""
+
+    # ── Provider: Groq ──
+    groq_api_key: str = ""
+    """Groq API key. Reads from ``AGENTSX_GROQ_API_KEY``."""
+
+    # ── Provider: OpenRouter ──
+    openrouter_api_key: str = ""
+    """OpenRouter API key. Reads from ``AGENTSX_OPENROUTER_API_KEY``."""
+
+    # ── Provider: vLLM ──
+    vllm_api_key: str = ""
+    """vLLM API key. Reads from ``AGENTSX_VLLM_API_KEY``."""
+
+    vllm_api_base: str = ""
+    """vLLM API base URL. Reads from ``AGENTSX_VLLM_API_BASE``."""
+
+    # ── Provider: SGLang ──
+    sglang_api_key: str = ""
+    """SGLang API key. Reads from ``AGENTSX_SGLANG_API_KEY``."""
+
+    sglang_api_base: str = ""
+    """SGLang API base URL. Reads from ``AGENTSX_SGLANG_API_BASE``."""
 
     # ── Tools ──
     tool_timeout: int = 30
@@ -85,7 +119,7 @@ class AgentsXSettings(BaseSettings):
     """Web search engine URL. Reads from ``AGENTSX_WEB_SEARCH_URL``."""
 
     web_user_agent: str = (
-        "Mozilla/5.0 (compatible; " "AgentsX/0.1.0; +https://github.com/agentsx)"
+        "Mozilla/5.0 (compatible; AgentsX/0.1.0; +https://github.com/agentsx)"
     )
     """User-Agent header for HTTP requests. Reads from ``AGENTSX_WEB_USER_AGENT``."""
 

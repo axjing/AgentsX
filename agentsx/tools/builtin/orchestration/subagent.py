@@ -32,6 +32,7 @@ def _get_orchestra() -> "Orchestrator":
     description=(
         "Spawn an isolated sub-agent to perform a task, then return its response."
     ),
+    toolset="orchestration",
 )
 async def spawn_agent(
     model_name: str = "",
