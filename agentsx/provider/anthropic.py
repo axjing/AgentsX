@@ -87,6 +87,7 @@ class AnthropicProvider(Provider):
                         raise ProviderError(
                             f"Anthropic API error (HTTP {response.status_code}): "
                             f"{body.decode(errors='replace')}",
+                            status_code=response.status_code,
                         )
 
                     event_type = ""

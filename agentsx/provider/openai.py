@@ -85,6 +85,7 @@ class OpenAIProvider(Provider):
                         raise ProviderError(
                             f"OpenAI API error (HTTP {response.status_code}): "
                             f"{body.decode(errors='replace')}",
+                            status_code=response.status_code,
                         )
                     async for line in response.aiter_lines():
                         if not line.startswith("data: "):

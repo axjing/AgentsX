@@ -109,7 +109,7 @@ class Provider(ABC):
                     yield event
                 return
             except ProviderError as exc:
-                if self._is_retryable(exc) and attempt < max_retries:
+                if exc.is_retryable and attempt < max_retries:
                     delay = self._calc_delay(attempt, base_delay, max_delay)
                     logger.warning(
                         "Provider %s error (attempt %d/%d), retrying in %.1fs: %s",
@@ -146,14 +146,6 @@ class Provider(ABC):
             f"Provider {self.model.provider_name} "
             f"retries exhausted after {max_retries} attempts",
             ProviderError("unknown"),
-        )
-
-    @staticmethod
-    def _is_retryable(error: ProviderError) -> bool:
-        """Check if a ProviderError is retryable based on HTTP status."""
-        msg = str(error).lower()
-        return any(
-            token in msg for token in ["429", "500", "502", "503", "504", "rate limit"]
         )
 
     @staticmethod

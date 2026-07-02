@@ -37,7 +37,6 @@ _FORBIDDEN_PATTERNS: list[str] = [
     ":(){*:*};:",  # fork bomb
     "mkfs.*",
     "dd if=* of=/dev/*",
-    "dd if=* of=/dev/*",
     "chmod -R 777 /",
     "chmod -R 000 /",
     "chown -R * /",
@@ -59,14 +58,15 @@ _WARNING_PATTERNS: list[str] = [
     "umount*",
     "wget*",
     "curl*|*",  # pipe to shell
-    "curl*|*",
-    "wget*|*",
+    "wget*|*",  # pipe to shell
     "bash -c*",
     "sh -c*",
     "eval*",
     "exec*",
     "python* -c*",
     "python3* -c*",
+    "sudo*",
+    "su *",
 ]
 
 # Injection patterns

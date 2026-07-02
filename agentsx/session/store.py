@@ -18,6 +18,8 @@ Design:
 
 import json
 import shutil
+import threading
+from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -62,8 +64,9 @@ class SessionStore:
         self.base_dir = Path(base_dir)
         self.base_dir.mkdir(parents=True, exist_ok=True)
         self._cache_size = cache_size
-        self._message_cache: dict[str, list[AgentMessage]] = {}
+        self._message_cache: OrderedDict[str, list[AgentMessage]] = OrderedDict()
         self._pending_timestamps: dict[str, str] = {}
+        self._meta_lock = threading.Lock()
 
     # ── Public API ─────────────────────────────────────────────────────
 
@@ -110,8 +113,10 @@ class SessionStore:
         """Load all messages for a session.
 
         Uses memory cache when available; falls back to disk read.
+        Cache entries are moved to end on access (LRU).
         """
         if session_id in self._message_cache:
+            self._message_cache.move_to_end(session_id)
             return list(self._message_cache[session_id])
 
         path = self._session_dir(session_id) / "messages.jsonl"
@@ -254,8 +259,9 @@ class SessionStore:
 
     def _write_meta(self, session: Session) -> None:
         # Flush any pending timestamps for this session before overwriting meta
-        self._pending_timestamps.pop(session.id, None)
-        self._flush_timestamps()
+        with self._meta_lock:
+            self._pending_timestamps.pop(session.id, None)
+            self._flush_timestamps()
         data: dict[str, object] = {
             "id": session.id,
             "created_at": session.created_at.isoformat(),
@@ -293,11 +299,9 @@ class SessionStore:
         self._pending_timestamps.clear()
 
     def _evict_cache(self) -> None:
-        """Remove oldest cached sessions if cache is full."""
+        """Remove oldest cached sessions if cache is full (true LRU)."""
         if len(self._message_cache) > self._cache_size:
-            # Evict the first cached session (LRU simple eviction)
-            evict_id = next(iter(self._message_cache))
-            self._message_cache.pop(evict_id, None)
+            self._message_cache.popitem(last=False)
 
 
 # ── Serialisation helpers ──────────────────────────────────────────────

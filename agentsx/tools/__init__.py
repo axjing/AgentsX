@@ -265,14 +265,18 @@ _JSON_TYPE_MAP: dict[str, str] = {
     "NoneType": "null",
     "list": "array",
     "dict": "object",
+    "set": "array",
+    "tuple": "array",
+    "frozenset": "array",
 }
 
 
 def _json_schema(fn: Callable[..., Any]) -> dict[str, object]:
     """Derive a minimal JSON schema from a function's signature.
 
-    Handles `X | Y` unions (Python 3.10+), `typing.Union`,
-    `typing.Optional`, and generic containers (`list[str]`, `dict[str, int]`).
+    Handles ``X | Y`` unions (Python 3.10+), ``typing.Union``,
+    ``typing.Optional``, ``Literal``, ``Enum``, and generic containers
+    (``list[str]``, ``dict[str, int]``).
     """
     import sys  # noqa: PLC0415
     import types  # noqa: PLC0415
@@ -294,7 +298,7 @@ def _json_schema(fn: Callable[..., Any]) -> dict[str, object]:
         is_optional = False
 
         if annotation is inspect.Parameter.empty:
-            json_type = "string"
+            schema: dict[str, object] = {"type": "string"}
         else:
             # Detect Union[X, None] / Optional[X] / X | None
             origin = getattr(annotation, "__origin__", None)
@@ -308,26 +312,57 @@ def _json_schema(fn: Callable[..., Any]) -> dict[str, object]:
                 if len(non_none) < len(args):
                     is_optional = True
                 if len(non_none) == 1:
-                    inner = non_none[0]
-                    json_type = _schema_type_for(inner)
+                    schema = _build_schema_type(non_none[0])
+                elif len(non_none) > 1:
+                    schema = _build_schema_type(non_none[0])
                 else:
-                    json_type = _schema_type_for(non_none[0] if non_none else str)
+                    schema = {"type": "null"}
             else:
-                json_type = _schema_type_for(annotation)
+                schema = _build_schema_type(annotation)
 
         # Parameters with default values or Optional types are not required
-        if param.default is inspect.Parameter.empty and not is_optional:
+        has_default = param.default is not inspect.Parameter.empty
+        if not has_default and not is_optional:
             required.append(param_name)
 
-        properties[param_name] = {"type": json_type}
+        properties[param_name] = schema
 
     return {"type": "object", "properties": properties, "required": required}
 
 
-def _schema_type_for(annotation: type) -> str:
-    """Map a Python type annotation to a JSON Schema type string."""
+def _build_schema_type(annotation: type) -> dict[str, object]:
+    """Build a JSON Schema fragment for a single Python type."""
+    import typing  # noqa: PLC0415
+    from enum import Enum  # noqa: PLC0415
+
     origin = getattr(annotation, "__origin__", None)
+
+    # Literal["a", "b", "c"]
+    if origin is typing.Literal:
+        values = typing.get_args(annotation)
+        return {"type": "string", "enum": list(values)}
+
+    # Enum subclass
+    if isinstance(annotation, type) and issubclass(annotation, Enum):
+        return {"type": "string", "enum": [e.value for e in annotation]}
+
+    # Generic containers
     if origin:
-        return _JSON_TYPE_MAP.get(origin.__name__, "string")
+        args = typing.get_args(annotation)
+        type_name = origin.__name__
+        json_type = _JSON_TYPE_MAP.get(type_name, "string")
+
+        if json_type == "array" and args:
+            items_schema = _build_schema_type(args[0])
+            return {"type": "array", "items": items_schema}
+
+        if json_type == "object" and len(args) >= 2:
+            # dict[str, SomeType] → additionalProperties
+            value_schema = _build_schema_type(args[1])
+            return {"type": "object", "additionalProperties": value_schema}
+
+        return {"type": json_type}
+
+    # Primitive types
     type_name = getattr(annotation, "__name__", str(annotation))
-    return _JSON_TYPE_MAP.get(type_name, "string")
+    return {"type": _JSON_TYPE_MAP.get(type_name, "string")}

@@ -13,10 +13,18 @@ think → act → observe → repeat cycle:
 
 Automatic context compaction is triggered when the message list
 exceeds configured thresholds (based on Pi's design).
+
+Steering queue (inspired by Pi's follow-up pattern):
+    Callers can pass a mutable ``steer_queue`` (e.g. ``collections.deque``).
+    Items pushed during the loop become additional user messages in the
+    next turn — enabling interrupt-and-redirect without stopping the
+    current tool execution.
 """
 
+import asyncio
 import logging
 import time
+from collections import deque
 from collections.abc import AsyncIterator
 
 from agentsx.config import get_settings
@@ -31,6 +39,7 @@ from agentsx.core.types import (
     ModelRequestEvent,
     ModelResponseEvent,
     PromptEvent,
+    StreamEvent,
     TextStreamEvent,
     ToolCall,
     ToolCallStreamEvent,
@@ -55,6 +64,17 @@ from agentsx.tools import ToolRegistry
 logger = logging.getLogger(__name__)
 
 
+# Maximum steer messages consumed per loop iteration (prevents unbounded
+# message accumulation from a fast producer during long tool calls).
+_MAX_STEER_PER_STEP = 8
+
+# Truncation strategy: when tool output exceeds the limit, keep both the
+# head and tail so the LLM sees the beginning AND the end of long results
+# (e.g., the tail of a log file or the last lines of a diff).
+_TRUNCATE_HEAD = 3000
+_TRUNCATE_TAIL = 1000
+
+
 async def run_agent_loop(
     provider: Provider,
     messages: list[AgentMessage],
@@ -66,6 +86,7 @@ async def run_agent_loop(
     compact: bool = True,
     compact_max_tokens: int = 0,
     compact_max_messages: int = 50,
+    steer_queue: deque[str] | None = None,
 ) -> AsyncIterator[AgentEvent]:
     """Run the ReAct agent loop.
 
@@ -86,6 +107,9 @@ async def run_agent_loop(
         compact_max_tokens: Token budget before compaction (0 = use message
             count only).
         compact_max_messages: Maximum message count before compaction.
+        steer_queue: Optional mutable deque for interrupt-and-redirect.
+            Items pushed during the loop become user messages in the next
+            turn after the current step completes.
 
     Yields:
         ``AgentEvent`` items — ``ModelRequestEvent``, ``ModelResponseEvent``
@@ -158,13 +182,17 @@ async def run_agent_loop(
             model=provider.model.id,
         )
 
-        # ── Stream from provider (with retry) ─────────────────────────
+        # ── Stream from provider (with step-level timeout) ────────────
         content_parts: list[str] = []
         pending_calls: list[ToolCallStreamEvent] = []
         step_start = time.monotonic()
 
+        step_timeout = settings.tool_timeout
         try:
-            async for event in provider.stream_with_retry(messages):
+            provider_stream = provider.stream_with_retry(messages)
+            if step_timeout > 0:
+                provider_stream = _wrap_step_timeout(provider_stream, step_timeout)
+            async for event in provider_stream:
                 if isinstance(event, TextStreamEvent):
                     content_parts.append(event.text)
                     if extensions is not None:
@@ -177,6 +205,12 @@ async def run_agent_loop(
                     yield ModelResponseEvent(content=event.text, delta=True)
                 elif isinstance(event, ToolCallStreamEvent):
                     pending_calls.append(event)
+        except TimeoutError as te:
+            yield ErrorEvent(
+                error=te,
+                context=f"step {step} exceeded {step_timeout}s timeout",
+            )
+            return
         except Exception as exc:  # noqa: BLE001
             if extensions is not None:
                 await extensions.emit(
@@ -222,10 +256,14 @@ async def run_agent_loop(
             break  # no tools → loop is done
 
         if tools is None:
-            raise RuntimeError(
-                f"Provider requested {len(pending_calls)} tool call(s) "
-                "but no ToolRegistry was provided",
+            yield ErrorEvent(
+                error=RuntimeError(
+                    f"Provider requested {len(pending_calls)} tool call(s) "
+                    "but no ToolRegistry was provided",
+                ),
+                context="missing ToolRegistry",
             )
+            return
 
         for tc_event in pending_calls:
             tc = tc_event.tool_call
@@ -324,6 +362,76 @@ async def run_agent_loop(
                 )
             )
 
+        # ── Steering queue: process interrupt-and-redirect ────────────
+        if steer_queue is not None:
+            consumed = 0
+            while steer_queue and consumed < _MAX_STEER_PER_STEP:
+                steer_msg = steer_queue.popleft()
+                consumed += 1
+                messages.append(
+                    AgentMessage(
+                        role=MessageRole.USER,
+                        content=steer_msg,
+                    )
+                )
+            if steer_queue:
+                logger.debug(
+                    "Steer queue: consumed %d/%d items (%d remaining)",
+                    consumed,
+                    consumed + len(steer_queue),
+                    len(steer_queue),
+                )
+
+
+class _Sentinel:
+    pass
+
+
+_STEP_DONE = _Sentinel()
+
+
+async def _wrap_step_timeout(
+    stream: AsyncIterator[StreamEvent],
+    timeout_seconds: float,
+) -> AsyncIterator[StreamEvent]:
+    """Wrap a provider stream with a per-step timeout.
+
+    Uses a sentinel value pushed to an ``asyncio.Queue`` so that the
+    consumer never blocks longer than *timeout_seconds* between events,
+    but finishes immediately when the source stream ends.
+    """
+    queue: asyncio.Queue[StreamEvent | Exception | _Sentinel] = asyncio.Queue()
+
+    async def _drain() -> None:
+        """Read from the source stream and forward to the queue."""
+        try:
+            async for item in stream:
+                await queue.put(item)
+        except Exception as exc:  # noqa: BLE001
+            await queue.put(exc)
+        finally:
+            await queue.put(_STEP_DONE)
+
+    asyncio.create_task(_drain())
+
+    while True:
+        try:
+            item = await asyncio.wait_for(
+                queue.get(),
+                timeout=timeout_seconds,
+            )
+        except TimeoutError:
+            raise TimeoutError(  # noqa: B904
+                f"Provider step timed out after {timeout_seconds}s",
+            )
+
+        if isinstance(item, _Sentinel):
+            break
+
+        if isinstance(item, Exception):
+            raise item
+        yield item
+
 
 async def _execute_tool_with_status(
     tc: ToolCall,
@@ -335,13 +443,30 @@ async def _execute_tool_with_status(
     Args:
         tc: The tool call to execute.
         tools: The tool registry.
-        max_output: Maximum characters to keep (0 = no limit).
+        max_output: Maximum characters to keep (0 = use resource_limits default).
+            Acts as a per-call ceiling on the resource limit.
     """
+    from agentsx.security.resource_limits import get_limits  # noqa: PLC0415
+
     try:
         result = await tools.call(tc.name, **tc.arguments)
-        if max_output > 0 and len(result) > max_output:
-            truncated = result[:max_output]
-            result = f"{truncated}\n... (output truncated at {max_output} chars)"
+        limits = get_limits()
+        effective_limit = limits.max_output_chars
+        if max_output > 0:
+            effective_limit = min(max_output, effective_limit)
+        if effective_limit > 0 and len(result) > effective_limit:
+            result = _truncate_head_tail(result, effective_limit)
         return result, False
     except Exception as exc:  # noqa: BLE001
         return str(exc), True
+
+
+def _truncate_head_tail(text: str, max_len: int) -> str:
+    """Truncate long output keeping head and tail with omitted summary."""
+    if max_len <= _TRUNCATE_HEAD + _TRUNCATE_TAIL:
+        return f"{text[:max_len]}\n... (truncated)"
+
+    head = text[:_TRUNCATE_HEAD]
+    tail = text[-_TRUNCATE_TAIL:]
+    omitted = len(text) - _TRUNCATE_HEAD - _TRUNCATE_TAIL
+    return f"{head}\n\n... ({omitted:,} characters omitted) ...\n\n{tail}"
