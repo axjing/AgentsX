@@ -212,19 +212,47 @@ async def run_agent_loop(
             )
             return
         except Exception as exc:  # noqa: BLE001
+            from agentsx.core.error_classifier import (  # noqa: PLC0415
+                classify_api_error,
+            )
+            from agentsx.core.errors import ProviderError  # noqa: PLC0415
+
+            classified = classify_api_error(
+                exc if isinstance(exc, ProviderError) else ProviderError(str(exc))
+            )
             if extensions is not None:
                 await extensions.emit(
                     ExtensionEvent(
                         type=EVENT_ON_ERROR,
                         data={
                             "error": str(exc),
-                            "context": f"stream failed at step {step}",
+                            "reason": str(classified.reason),
+                            "recovery_hint": classified.recovery.user_hint,
                         },
                     )
                 )
+
+            # Auto-retry on context overflow: compact and retry once
+            if classified.recovery.should_compress and compact:
+                logger.info("Auto-compacting on context overflow")
+                old_count = len(messages)
+                compacted = compact_messages(messages)
+                if len(compacted) < old_count:
+                    messages.clear()
+                    messages.extend(compacted)
+                    yield CompactionEvent(
+                        compacted_count=old_count - len(compacted),
+                        preserved_count=len(compacted),
+                    )
+                    # Retry the step once after compaction
+                    continue
+
             yield ErrorEvent(
                 error=exc,
-                context=f"Provider stream failed at step {step}",
+                context=(
+                    f"classified as {classified.reason}: "
+                    f"{classified.recovery.user_hint}"
+                ),
             )
             return
 
