@@ -10,9 +10,10 @@ base URL and API key. This covers most major providers:
 - Ollama (http://localhost:11434/v1)
 - Together AI (https://api.together.xyz/v1)
 - vLLM, LM Studio, and other local servers
+
+Uses ``OpenAITransport`` for format conversion and stream parsing.
 """
 
-import json
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -20,14 +21,9 @@ import httpx
 
 from agentsx.config import get_settings
 from agentsx.core.errors import ProviderError
-from agentsx.core.types import (
-    AgentMessage,
-    StreamEvent,
-    TextStreamEvent,
-    ToolCall,
-    ToolCallStreamEvent,
-)
+from agentsx.core.types import AgentMessage, StreamEvent
 from agentsx.provider import Model, Provider, get_profile, register_provider
+from agentsx.provider.transport import OpenAITransport
 
 
 class GenericProvider(Provider):
@@ -35,6 +31,7 @@ class GenericProvider(Provider):
 
     Connects to any OpenAI-compatible API endpoint. The provider
     is configured via settings or explicit constructor arguments.
+    Uses ``OpenAITransport`` for format conversion and stream parsing.
 
     Usage::
 
@@ -61,6 +58,7 @@ class GenericProvider(Provider):
         self.model = model
         self._api_key = api_key
         self._api_base = api_base
+        self.transport = OpenAITransport()
 
     def _resolve_api_key(self) -> str:
         settings = get_settings()
@@ -112,20 +110,19 @@ class GenericProvider(Provider):
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
 
-        payload: dict[str, Any] = {
-            "model": self.model.id,
-            "messages": self.format_messages(messages),
-            "stream": True,
-            "max_tokens": self.model.max_tokens,
-        }
-        if self.tools is not None:
-            payload["tools"] = self.tools.to_openai_tools()
-
+        assert self.transport is not None
+        formatted = self.transport.format_messages(messages)
+        kwargs = self.transport.build_kwargs(
+            messages=formatted,
+            tools=self.tools.to_openai_tools() if self.tools else None,
+            max_tokens=self.model.max_tokens,
+            model=self.model.id,
+        )
         # Provider-specific overrides
         if self.model.provider_name == "deepseek":
-            payload["max_tokens"] = self.model.max_tokens or 8192
+            kwargs["max_tokens"] = self.model.max_tokens or 8192
 
-        tool_deltas: dict[int, dict[str, str]] = {}
+        kwargs["headers"] = headers
 
         url = f"{api_base.rstrip('/')}/chat/completions"
         async with httpx.AsyncClient(timeout=60.0) as client:
@@ -133,8 +130,7 @@ class GenericProvider(Provider):
                 async with client.stream(
                     "POST",
                     url,
-                    json=payload,
-                    headers=headers,
+                    json=kwargs,
                 ) as response:
                     if response.status_code != 200:
                         body = await response.aread()
@@ -144,60 +140,8 @@ class GenericProvider(Provider):
                             f"{body.decode(errors='replace')}",
                             status_code=response.status_code,
                         )
-                    async for line in response.aiter_lines():
-                        if not line.startswith("data: "):
-                            continue
-                        data = line.removeprefix("data: ").strip()
-                        if data in ("", "[DONE]"):
-                            continue
-
-                        parsed = _parse_sse_chunk(data)
-                        if parsed is None:
-                            continue
-
-                        text = parsed.get("text")
-                        if text:
-                            yield TextStreamEvent(text=text)
-
-                        tc_list = parsed.get("tool_calls")
-                        if tc_list:
-                            for tc in tc_list:
-                                idx = tc.get("index", 0)
-                                if idx not in tool_deltas:
-                                    tool_deltas[idx] = {
-                                        "id": "",
-                                        "name": "",
-                                        "arguments": "",
-                                    }
-                                entry = tool_deltas[idx]
-                                if "id" in tc and tc["id"]:
-                                    entry["id"] = tc["id"]
-                                fn = tc.get("function")
-                                if isinstance(fn, dict):
-                                    if "name" in fn and fn["name"]:
-                                        entry["name"] = fn["name"]
-                                    if "arguments" in fn and fn["arguments"]:
-                                        entry["arguments"] += fn["arguments"]
-
-                        finish = parsed.get("finish_reason")
-                        if finish == "tool_calls" and tool_deltas:
-                            for entry in tool_deltas.values():
-                                try:
-                                    args = (
-                                        json.loads(entry["arguments"])
-                                        if entry["arguments"]
-                                        else {}
-                                    )
-                                except json.JSONDecodeError:
-                                    args = {}
-                                yield ToolCallStreamEvent(
-                                    tool_call=ToolCall(
-                                        id=entry["id"],
-                                        name=entry["name"],
-                                        arguments=args,
-                                    ),
-                                )
-                            tool_deltas.clear()
+                    async for event in self.transport.parse_stream(response):
+                        yield event
 
             except httpx.RequestError as exc:
                 raise ProviderError(
@@ -205,46 +149,18 @@ class GenericProvider(Provider):
                 ) from exc
 
     def format_messages(self, messages: list[AgentMessage]) -> list[dict[str, Any]]:
-        """Convert AgentMessages to OpenAI-compatible message format."""
-        result: list[dict[str, Any]] = []
-        for msg in messages:
-            converted = msg.convert_to_provider("openai")
-            result.append(converted)
-        return result
+        """Convert AgentMessages to OpenAI-compatible message format.
 
+        Delegates to the configured ``OpenAITransport``.
 
-def _parse_sse_chunk(data: str) -> dict[str, Any] | None:
-    """Parse a single SSE data: line from OpenAI-compatible API."""
-    try:
-        obj: dict[str, Any] = json.loads(data)
-    except json.JSONDecodeError:
-        return None
+        Args:
+            messages: Conversation history in AgentMessage format.
 
-    choices = obj.get("choices")
-    if not choices or not isinstance(choices, list) or not choices:
-        return None
-
-    first = choices[0]
-    if not isinstance(first, dict):
-        return None
-
-    result: dict[str, Any] = {}
-
-    delta = first.get("delta", {})
-    if isinstance(delta, dict):
-        content = delta.get("content")
-        if isinstance(content, str):
-            result["text"] = content
-
-        tc_raw = delta.get("tool_calls")
-        if tc_raw and isinstance(tc_raw, list):
-            result["tool_calls"] = tc_raw
-
-    finish = first.get("finish_reason")
-    if isinstance(finish, str) and finish:
-        result["finish_reason"] = finish
-
-    return result
+        Returns:
+            A list of dicts in OpenAI message wire format.
+        """
+        assert self.transport is not None
+        return self.transport.format_messages(messages)
 
 
 # Register all generic providers
