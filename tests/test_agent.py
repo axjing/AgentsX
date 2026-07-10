@@ -113,7 +113,7 @@ class TestRunAgentLoop:
         assert isinstance(events[0], ModelRequestEvent)
         assert isinstance(events[1], ErrorEvent)
         assert "retries exhausted" in str(events[1].error)
-        assert "step 1" in events[1].context
+        assert "FailoverReason.UNKNOWN" in events[1].context
 
 
 class TestAgent:
