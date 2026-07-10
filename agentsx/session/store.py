@@ -27,8 +27,15 @@ from typing import Any
 from uuid import uuid4
 
 from agentsx.config import get_settings
+from agentsx.context.compaction_entry import CompactionEntry
+from agentsx.context.compaction_entry import (
+    append_compaction_entry as _append_compaction_entry,
+)
 from agentsx.core.errors import SessionError
 from agentsx.core.types import AgentMessage, MessageRole, ToolCall
+
+# Alias for list type annotation — the .list() method shadows the builtin.
+_List = list
 
 
 @dataclass
@@ -251,6 +258,36 @@ class SessionStore:
         session.title = title
         self._write_meta(session)
         return session
+
+    def append_compaction_entry(
+        self,
+        session_id: str,
+        replaces_ids: _List[str],
+        summary: str,
+        token_estimate: int = 0,
+    ) -> None:
+        """Record a compaction without modifying the session file.
+
+        The compaction entry is appended to ``compaction.jsonl`` in the
+        session directory, preserving an append-only audit trail.
+
+        Args:
+            session_id: The session ID to record the entry for.
+            replaces_ids: The message IDs that were compacted.
+            summary: A human-readable summary of the compacted messages.
+            token_estimate: An estimate of the tokens saved by this
+                compaction.
+        """
+        session_dir = self._session_dir(session_id)
+        if not session_dir.is_dir():
+            msg = f"Session not found: {session_id}"
+            raise SessionError(msg)
+        entry = CompactionEntry(
+            replaces_ids=replaces_ids,
+            summary=summary,
+            token_estimate=token_estimate,
+        )
+        _append_compaction_entry(session_dir / "compaction.jsonl", entry)
 
     # ── Internals ──────────────────────────────────────────────────────
 
