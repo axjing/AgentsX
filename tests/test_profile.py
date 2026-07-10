@@ -2,6 +2,9 @@
 
 import dataclasses
 import tempfile
+from dataclasses import FrozenInstanceError
+
+import pytest
 
 from agentsx.core.profile import (
     AgentPosture,
@@ -19,12 +22,9 @@ def test_context_profile_frozen() -> None:
         toolset_filter=frozenset({"read", "write"}),
     )
     assert dataclasses.is_dataclass(profile)
-    # Verify immutability: mutation should raise
-    try:
-        profile.name = "changed"
-        raise AssertionError("Should be frozen")
-    except (TypeError, AttributeError, dataclasses.FrozenInstanceError):
-        pass
+    # Verify immutability: mutation should raise FrozenInstanceError
+    with pytest.raises(FrozenInstanceError):
+        profile.name = "changed"  # type: ignore[misc]
 
 
 def test_resolve_runtime_mode_in_git_repo() -> None:

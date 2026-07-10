@@ -156,6 +156,8 @@ async def _anthropic_parse_stream_impl(
     import json
 
     event_type = ""
+    tool_accumulators: dict[int, dict[str, str]] = {}  # index -> {id, name, input_json}
+
     async for line in response.aiter_lines():
         if line.startswith("event: "):
             event_type = line.removeprefix("event: ").strip()
@@ -174,10 +176,47 @@ async def _anthropic_parse_stream_impl(
 
         if event_type == "content_block_delta":
             delta = obj.get("delta", {})
-            if delta.get("type") == "text_delta":
+            delta_type = delta.get("type")
+            if delta_type == "text_delta":
                 text = delta.get("text", "")
                 if text:
                     yield TextStreamEvent(text=text)
+            elif delta_type == "input_json_delta":
+                partial_json = delta.get("partial_json", "")
+                # Accumulate into the active tool's input (identified by the
+                # most recently started content-block index).
+                index = obj.get("index", 0)
+                if index in tool_accumulators:
+                    tool_accumulators[index]["input_json"] += partial_json
+
+        elif event_type == "content_block_start":
+            content_block = obj.get("content_block", {})
+            if content_block.get("type") == "tool_use":
+                index = obj.get("index", 0)
+                tool_accumulators[index] = {
+                    "id": content_block.get("id", ""),
+                    "name": content_block.get("name", ""),
+                    "input_json": "",
+                }
+
+        elif event_type == "content_block_stop":
+            # If we have an accumulated tool call, yield it on stop.
+            index = obj.get("index", 0)
+            if index in tool_accumulators:
+                entry = tool_accumulators.pop(index)
+                try:
+                    args = (
+                        json.loads(entry["input_json"]) if entry["input_json"] else {}
+                    )
+                except json.JSONDecodeError:
+                    args = {}
+                yield ToolCallStreamEvent(
+                    tool_call=ToolCall(
+                        id=entry["id"],
+                        name=entry["name"],
+                        arguments=args,
+                    ),
+                )
 
 
 class OpenAITransport(ProviderTransport):

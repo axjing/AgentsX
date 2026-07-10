@@ -5,6 +5,7 @@ and message queues (steering + follow-up).  Execution is delegated
 to the pure ``run_agent_loop()`` async generator.
 """
 
+import logging
 from collections import deque
 from collections.abc import AsyncIterator, Callable
 
@@ -17,6 +18,8 @@ from agentsx.tools import ToolRegistry
 
 EventListener = Callable[[AgentEvent], None]
 """Callback signature for event subscribers."""
+
+logger = logging.getLogger(__name__)
 
 
 class AgentHarness:
@@ -208,5 +211,5 @@ class AgentHarness:
                 try:
                     listener(event)
                 except Exception:  # noqa: BLE001
-                    pass
+                    logger.exception("Event listener error")
             yield event

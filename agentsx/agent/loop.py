@@ -22,6 +22,7 @@ Steering queue (inspired by Pi's follow-up pattern):
 """
 
 import asyncio
+import dataclasses
 import logging
 import time
 from collections import deque
@@ -508,7 +509,12 @@ async def _execute_tool_with_status(
         if max_output > 0:
             effective_limit = min(max_output, effective_limit)
         if effective_limit > 0 and len(result.content) > effective_limit:
-            result.content = _truncate_head_tail(result.content, effective_limit)
+            truncated = _truncate_head_tail(result.content, effective_limit)
+            result = dataclasses.replace(
+                result,
+                content=truncated,
+                metadata={**result.metadata, "truncated": "true"},
+            )
     return result
 
 

@@ -99,33 +99,49 @@ def test_openai_parse_stream_tool_calls() -> None:
     # Simulate tool_call deltas accumulating across multiple chunks,
     # then finish_reason == "tool_calls"
     chunks = [
-        json.dumps({
-            "choices": [{
-                "delta": {
-                    "tool_calls": [{
-                        "index": 0,
-                        "id": "tc_1",
-                        "function": {"name": "read_file", "arguments": ""},
-                    }],
-                },
-            }],
-        }),
-        json.dumps({
-            "choices": [{
-                "delta": {
-                    "tool_calls": [{
-                        "index": 0,
-                        "function": {"arguments": '{"path": "foo.txt"}'},
-                    }],
-                },
-            }],
-        }),
-        json.dumps({
-            "choices": [{
-                "delta": {},
-                "finish_reason": "tool_calls",
-            }],
-        }),
+        json.dumps(
+            {
+                "choices": [
+                    {
+                        "delta": {
+                            "tool_calls": [
+                                {
+                                    "index": 0,
+                                    "id": "tc_1",
+                                    "function": {"name": "read_file", "arguments": ""},
+                                }
+                            ],
+                        },
+                    }
+                ],
+            }
+        ),
+        json.dumps(
+            {
+                "choices": [
+                    {
+                        "delta": {
+                            "tool_calls": [
+                                {
+                                    "index": 0,
+                                    "function": {"arguments": '{"path": "foo.txt"}'},
+                                }
+                            ],
+                        },
+                    }
+                ],
+            }
+        ),
+        json.dumps(
+            {
+                "choices": [
+                    {
+                        "delta": {},
+                        "finish_reason": "tool_calls",
+                    }
+                ],
+            }
+        ),
     ]
     lines = [f"data: {c}" for c in chunks]
     response = _MockSSELines(lines)
