@@ -13,6 +13,7 @@ from agentsx.core.types import (
     ToolCall,
     ToolExecutionEvent,
     ToolResult,
+    ToolResultStatus,
 )
 
 
@@ -42,26 +43,27 @@ class TestToolCall:
 class TestToolResult:
     def test_creation(self) -> None:
         tr = ToolResult(
-            id="res_1",
             tool_call_id="call_1",
+            status=ToolResultStatus.SUCCESS,
             content="file content",
-            is_error=False,
         )
-        assert tr.id == "res_1"
         assert tr.tool_call_id == "call_1"
         assert tr.content == "file content"
-        assert not tr.is_error
+        assert tr.is_success
 
     def test_error_default(self) -> None:
-        tr = ToolResult(id="res_1", tool_call_id="call_1", content="error")
+        tr = ToolResult(
+            tool_call_id="call_1",
+            status=ToolResultStatus.SUCCESS,
+            content="error",
+        )
         assert not tr.is_error
 
     def test_explicit_error(self) -> None:
         tr = ToolResult(
-            id="res_1",
             tool_call_id="call_1",
+            status=ToolResultStatus.ERROR,
             content="error",
-            is_error=True,
         )
         assert tr.is_error
 
@@ -157,7 +159,11 @@ class TestEvents:
 
     def test_tool_execution_event(self) -> None:
         tc = ToolCall(id="call_1", name="read_file", arguments={})
-        tr = ToolResult(id="res_1", tool_call_id="call_1", content="data")
+        tr = ToolResult(
+            tool_call_id="call_1",
+            status=ToolResultStatus.SUCCESS,
+            content="data",
+        )
         event = ToolExecutionEvent(tool_call=tc, result=tr)
         assert event.tool_call.name == "read_file"
         assert event.result.content == "data"
@@ -175,7 +181,11 @@ class TestEvents:
             ModelResponseEvent(content="hi"),
             ToolExecutionEvent(
                 tool_call=ToolCall(id="c1", name="t", arguments={}),
-                result=ToolResult(id="r1", tool_call_id="c1", content="ok"),
+                result=ToolResult(
+                    tool_call_id="c1",
+                    status=ToolResultStatus.SUCCESS,
+                    content="ok",
+                ),
             ),
             ErrorEvent(error=ValueError("e"), context="ctx"),
         ]

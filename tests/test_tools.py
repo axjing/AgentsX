@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 
-from agentsx.core.errors import ToolError
 from agentsx.tools import ToolRegistry, ToolSpec, tool
 from agentsx.tools.builtin import ALL_TOOLS
 from agentsx.tools.builtin.read.filesystem import (
@@ -42,7 +41,7 @@ class TestToolSpec:
 
         spec = ToolSpec(name="add", description="Add two numbers", fn=add)
         result = await spec.call(a=1, b=2)
-        assert result == "3"
+        assert result.content == "3"
 
     @pytest.mark.asyncio
     async def test_call_async(self) -> None:
@@ -51,17 +50,28 @@ class TestToolSpec:
 
         spec = ToolSpec(name="sadd", description="Slow add", fn=slow_add)
         result = await spec.call(a=10, b=20)
-        assert result == "30"
+        assert result.content == "30"
 
     @pytest.mark.asyncio
-    async def test_call_raises_tool_error(self) -> None:
+    async def test_call_returns_tool_result(self) -> None:
+        def add(a: int, b: int) -> int:
+            return a + b
+
+        spec = ToolSpec(name="add2", description="Add two numbers", fn=add)
+        result = await spec.call(a=5, b=7)
+        assert result.is_success
+        assert result.content == "12"
+
+    @pytest.mark.asyncio
+    async def test_call_error_returns_tool_result(self) -> None:
         def broken() -> str:
             msg = "internal"
             raise ValueError(msg)
 
         spec = ToolSpec(name="broken", description="Broken tool", fn=broken)
-        with pytest.raises(ToolError, match="broken"):
-            await spec.call()
+        result = await spec.call()
+        assert result.is_error
+        assert "internal" in result.content
 
     def test_check_fn_default(self) -> None:
         def always_true() -> bool:
@@ -118,8 +128,9 @@ class TestToolRegistry:
     @pytest.mark.asyncio
     async def test_call_unknown_tool(self) -> None:
         registry = ToolRegistry()
-        with pytest.raises(ToolError, match="Unknown tool"):
-            await registry.call("nope")
+        result = await registry.call("nope")
+        assert result.is_error
+        assert "Unknown tool" in result.content
 
     def test_to_openai_tools(self) -> None:
         registry = ToolRegistry()
@@ -166,7 +177,8 @@ class TestToolDecorator:
             return a + b
 
         result = await add.call(a=3, b=4)
-        assert result == "7"
+        assert result.is_success
+        assert result.content == "7"
 
     def test_decorator_with_check_fn(self) -> None:
         @tool(description="Conditional tool", check_fn=lambda: False)
@@ -190,16 +202,16 @@ class TestToolFileRead:
             tmp = f.name
         try:
             result = await tool_file_read.call(path=tmp)
-            assert "line1" in result
-            assert "line2" in result
-            assert "line3" in result
+            assert "line1" in result.content
+            assert "line2" in result.content
+            assert "line3" in result.content
         finally:
             Path(tmp).unlink(missing_ok=True)
 
     @pytest.mark.asyncio
     async def test_read_missing(self) -> None:
         result = await tool_file_read.call(path="/nonexistent/file.txt")
-        assert "file not found" in result
+        assert "file not found" in result.content
 
     @pytest.mark.asyncio
     async def test_read_with_offset(self) -> None:
@@ -208,7 +220,7 @@ class TestToolFileRead:
             tmp = f.name
         try:
             result = await tool_file_read.call(path=tmp, offset=3)
-            lines = result.strip().split("\n")
+            lines = result.content.strip().split("\n")
             assert lines[0].startswith("3: c")
         finally:
             Path(tmp).unlink(missing_ok=True)
@@ -225,7 +237,7 @@ class TestToolFileWrite:
                 path=str(path),
                 content="hello world",
             )
-            assert "Wrote" in result
+            assert "Wrote" in result.content
             assert path.read_text() == "hello world"
 
     @pytest.mark.asyncio
@@ -237,7 +249,7 @@ class TestToolFileWrite:
                 path=str(path),
                 content="new content",
             )
-            assert "Wrote" in result
+            assert "Wrote" in result.content
             assert path.read_text() == "new content"
 
 
@@ -247,7 +259,7 @@ class TestToolFileGlob:
     @pytest.mark.asyncio
     async def test_glob_py_files(self) -> None:
         result = await tool_file_glob.call(pattern="*.py", root="agentsx")
-        assert result == "" or "agentsx" in result
+        assert result.content == "" or "agentsx" in result.content
 
 
 # ── Built-in: ALL_TOOLS ──────────────────────────────────────────────

@@ -157,8 +157,8 @@ class TestExecutionPolicyIntegration:
     """Policy + agent loop end-to-end."""
 
     @pytest.mark.asyncio
-    async def test_forbidden_tool_returns_error(self) -> None:
-        """A FORBIDDEN tool produces an error ToolResult."""
+    async def test_forbidden_tool_returns_blocked(self) -> None:
+        """A FORBIDDEN tool produces a BLOCKED ToolResult."""
         provider = _mock_provider_with_tool_call()
         tools = _bash_tool_registry()
         policy = ExecutionPolicy(rules=[Rule("bash:*", Decision.FORBIDDEN)])
@@ -176,7 +176,7 @@ class TestExecutionPolicyIntegration:
 
         tool_events = [e for e in events if isinstance(e, ToolExecutionEvent)]
         assert len(tool_events) == 1
-        assert tool_events[0].result.is_error
+        assert tool_events[0].result.is_blocked
         assert "forbidden" in tool_events[0].result.content.lower()
 
     @pytest.mark.asyncio

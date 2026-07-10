@@ -23,6 +23,7 @@ from collections.abc import Callable
 from typing import Any, TypeVar
 
 from agentsx.core.errors import ToolError
+from agentsx.core.tool_result import ToolResult, ToolResultStatus
 
 _F = TypeVar("_F", bound=Callable[..., Any])
 
@@ -96,17 +97,24 @@ class ToolSpec:
             "input_schema": self.parameters,
         }
 
-    async def call(self, **kwargs: object) -> str:
-        """Execute the tool and return the result as a string."""
+    async def call(self, **kwargs: object) -> ToolResult:
+        """Execute the tool and return a structured ToolResult."""
         try:
             result = self.fn(**kwargs)
             if inspect.iscoroutine(result):
                 result = await result
-            return str(result)
-        except Exception as exc:
-            raise ToolError(
-                f"Tool '{self.name}' failed: {exc}",
-            ) from exc
+            return ToolResult(
+                tool_call_id="",
+                status=ToolResultStatus.SUCCESS,
+                content=str(result),
+            )
+        except Exception as exc:  # noqa: BLE001
+            return ToolResult(
+                tool_call_id="",
+                status=ToolResultStatus.ERROR,
+                content=str(exc),
+                error=exc,
+            )
 
 
 class ToolRegistry:
@@ -169,11 +177,16 @@ class ToolRegistry:
         """Look up a tool by name."""
         return self._tools.get(name)
 
-    async def call(self, name: str, **kwargs: object) -> str:
-        """Look up and call a tool by name."""
+    async def call(self, name: str, **kwargs: object) -> ToolResult:
+        """Look up and call a tool by name, returning a ToolResult."""
         tool = self.get(name)
         if tool is None:
-            raise ToolError(f"Unknown tool: '{name}'")
+            return ToolResult(
+                tool_call_id="",
+                status=ToolResultStatus.ERROR,
+                content=f"Unknown tool: '{name}'",
+                error=ToolError(f"Unknown tool: '{name}'"),
+            )
         return await tool.call(**kwargs)
 
     # ── Listing (respects toolset filters) ───────────────────

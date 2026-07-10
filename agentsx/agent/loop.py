@@ -29,6 +29,7 @@ from collections.abc import AsyncIterator
 
 from agentsx.config import get_settings
 from agentsx.context.compaction import compact_messages, should_compact
+from agentsx.core.tool_result import ToolResultStatus
 from agentsx.core.types import (
     AgentEvent,
     AgentMessage,
@@ -310,26 +311,32 @@ async def run_agent_loop(
             if policy is not None:
                 decision = policy.evaluate(tc.name, tc.arguments)
                 if decision == Decision.FORBIDDEN:
-                    result_text = f"Blocked by policy: '{tc.name}' is forbidden"
-                    error_flag = True
+                    tool_result = ToolResult(
+                        tool_call_id=tc.id,
+                        status=ToolResultStatus.BLOCKED,
+                        content=f"Blocked by policy: '{tc.name}' is forbidden",
+                    )
                 elif decision == Decision.PROMPT:
                     yield PromptEvent(
                         tool_call=tc,
                         policy_decision="requires user confirmation",
                     )
-                    result_text = (
-                        f"Blocked by policy: '{tc.name}' requires "
-                        "user confirmation (set policy to ALLOW to skip)"
+                    tool_result = ToolResult(
+                        tool_call_id=tc.id,
+                        status=ToolResultStatus.BLOCKED,
+                        content=(
+                            f"Blocked by policy: '{tc.name}' requires "
+                            "user confirmation (set policy to ALLOW to skip)"
+                        ),
                     )
-                    error_flag = True
                 else:  # ALLOW
-                    result_text, error_flag = await _execute_tool_with_status(
+                    tool_result = await _execute_tool_with_status(
                         tc,
                         tools,
                         settings.max_tool_output,
                     )
             else:
-                result_text, error_flag = await _execute_tool_with_status(
+                tool_result = await _execute_tool_with_status(
                     tc,
                     tools,
                     settings.max_tool_output,
@@ -340,15 +347,10 @@ async def run_agent_loop(
                 "Tool '%s' executed in %.2fs, error=%s",
                 tc.name,
                 tool_elapsed,
-                error_flag,
+                tool_result.is_error,
             )
 
-            tool_result = ToolResult(
-                id=f"tr_{tc.id}",
-                tool_call_id=tc.id,
-                content=result_text,
-                is_error=error_flag,
-            )
+            result_text = tool_result.to_legacy_string()
 
             # ── Extension: tool result ────────────────────────────────
             if extensions is not None:
@@ -357,7 +359,7 @@ async def run_agent_loop(
                         type=EVENT_ON_TOOL_RESULT,
                         data={
                             "name": tc.name,
-                            "success": not error_flag,
+                            "success": tool_result.is_success,
                             "content": result_text[:500],
                         },
                     )
@@ -465,8 +467,8 @@ async def _execute_tool_with_status(
     tc: ToolCall,
     tools: ToolRegistry,
     max_output: int = 0,
-) -> tuple[str, bool]:
-    """Execute a single tool call and return (result_text, is_error).
+) -> ToolResult:
+    """Execute a single tool call and return a ToolResult.
 
     Args:
         tc: The tool call to execute.
@@ -476,17 +478,18 @@ async def _execute_tool_with_status(
     """
     from agentsx.security.resource_limits import get_limits  # noqa: PLC0415
 
-    try:
-        result = await tools.call(tc.name, **tc.arguments)
+    result = await tools.call(tc.name, **tc.arguments)
+    if result.tool_call_id == "":
+        result.tool_call_id = tc.id
+
+    if result.is_success:
         limits = get_limits()
         effective_limit = limits.max_output_chars
         if max_output > 0:
             effective_limit = min(max_output, effective_limit)
-        if effective_limit > 0 and len(result) > effective_limit:
-            result = _truncate_head_tail(result, effective_limit)
-        return result, False
-    except Exception as exc:  # noqa: BLE001
-        return str(exc), True
+        if effective_limit > 0 and len(result.content) > effective_limit:
+            result.content = _truncate_head_tail(result.content, effective_limit)
+    return result
 
 
 def _truncate_head_tail(text: str, max_len: int) -> str:

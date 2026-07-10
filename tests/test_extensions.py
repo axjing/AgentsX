@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
+from agentsx.core.tool_result import ToolResult, ToolResultStatus
 from agentsx.core.types import (
     AgentMessage,
     MessageRole,
@@ -185,7 +186,11 @@ class TestExtensionIntegration:
         provider.stream_with_retry = stream
 
         tools = AsyncMock()
-        tools.call.return_value = "executed!"
+        tools.call.return_value = ToolResult(
+            tool_call_id="tc1",
+            status=ToolResultStatus.SUCCESS,
+            content="executed!",
+        )
 
         ext_api = ExtensionAPI()
         fired: list[str] = []

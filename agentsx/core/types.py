@@ -13,6 +13,11 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from agentsx.core.tool_result import ToolResult, ToolResultStatus
+
+# Re-exported from tool_result module for backward compatibility.
+__all__ = ["ToolResult", "ToolResultStatus"]
+
 # --- Multimodal Content Types ---
 
 
@@ -192,16 +197,6 @@ class ToolCall:
     id: str
     name: str
     arguments: dict[str, Any]
-
-
-@dataclass
-class ToolResult:
-    """Result of executing a tool call."""
-
-    id: str
-    tool_call_id: str
-    content: str
-    is_error: bool = False
 
 
 # ── Message ───────────────────────────────────────────────────
