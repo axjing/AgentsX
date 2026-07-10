@@ -17,6 +17,7 @@ from agentsx.core.types import (
     MessageRole,
     StreamEvent,
     TextStreamEvent,
+    ToolCall,
     ToolCallStreamEvent,
 )
 
@@ -133,8 +134,6 @@ async def _openai_parse_stream_impl(
 
         finish = first.get("finish_reason")
         if finish == "tool_calls" and tool_deltas:
-            from agentsx.core.types import ToolCall
-
             for entry in tool_deltas.values():
                 try:
                     args = json.loads(entry["arguments"]) if entry["arguments"] else {}
@@ -184,6 +183,8 @@ async def _anthropic_parse_stream_impl(
 class OpenAITransport(ProviderTransport):
     """Transport adapter for OpenAI-compatible APIs."""
 
+    DEFAULT_MODEL = "gpt-4o"
+
     def format_messages(self, messages: list[AgentMessage]) -> list[dict[str, Any]]:
         """Convert ``AgentMessage`` objects to OpenAI message format.
 
@@ -224,7 +225,7 @@ class OpenAITransport(ProviderTransport):
             and optionally ``tools`` / ``temperature``.
         """
         kwargs: dict[str, Any] = {
-            "model": extra.get("model", "gpt-4o"),
+            "model": extra.get("model", self.DEFAULT_MODEL),
             "messages": messages,
             "max_tokens": max_tokens,
             "stream": True,
@@ -253,6 +254,8 @@ class OpenAITransport(ProviderTransport):
 
 class AnthropicTransport(ProviderTransport):
     """Transport adapter for Anthropic Claude API."""
+
+    DEFAULT_MODEL = "claude-sonnet-4-20250514"
 
     def format_messages(self, messages: list[AgentMessage]) -> list[dict[str, Any]]:
         """Convert ``AgentMessage`` objects to Anthropic message format.
@@ -298,9 +301,10 @@ class AnthropicTransport(ProviderTransport):
             optionally ``system`` / ``tools``.
         """
         kwargs: dict[str, Any] = {
-            "model": extra.get("model", "claude-sonnet-4-20250514"),
+            "model": extra.get("model", self.DEFAULT_MODEL),
             "messages": messages,
             "max_tokens": max_tokens,
+            "stream": True,
         }
         if "system" in extra:
             kwargs["system"] = extra["system"]
