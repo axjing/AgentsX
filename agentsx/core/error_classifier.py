@@ -122,6 +122,11 @@ def classify_api_error(err: Exception) -> ClassifiedError:
     4. Network heuristics
     5. Fallback to UNKNOWN
 
+    Note:
+        The parameter type is deliberately ``Exception`` rather than
+        ``ProviderError`` so that callers can pass any exception (including
+        raw network errors) without needing to wrap it first.
+
     Args:
         err: The exception to classify (typically a ``ProviderError``).
 

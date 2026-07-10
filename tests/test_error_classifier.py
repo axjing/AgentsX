@@ -75,4 +75,36 @@ def test_classify_timeout_network() -> None:
     err = ProviderError("Connection error")
     err.__cause__ = ConnectionError("Connection refused")
     result = classify_api_error(err)
+    assert result.reason == FailoverReason.NETWORK_ERROR
     assert result.recovery.should_retry is True
+
+
+def test_classify_402_temporary_as_rate_limit() -> None:
+    """402 with 'try again' or 'temporary' in message should be RATE_LIMIT."""
+    err = ProviderError("Credit limit reached, try again later", status_code=402)
+    result = classify_api_error(err)
+    assert result.reason == FailoverReason.RATE_LIMIT
+    assert result.recovery.should_retry is True
+    assert result.recovery.should_fallback is False
+
+    err2 = ProviderError("Temporary quota exceeded", status_code=402)
+    result2 = classify_api_error(err2)
+    assert result2.reason == FailoverReason.RATE_LIMIT
+
+
+def test_classify_auth_403() -> None:
+    """HTTP 403 should be AUTH_ERROR and not retryable."""
+    err = ProviderError("Access denied", status_code=403)
+    result = classify_api_error(err)
+    assert result.reason == FailoverReason.AUTH_ERROR
+    assert result.recovery.should_retry is False
+    assert result.recovery.should_fallback is True
+
+
+def test_classify_server_500_retryable() -> None:
+    """HTTP 500 should be SERVER_ERROR and retryable."""
+    err = ProviderError("Internal server error", status_code=500)
+    result = classify_api_error(err)
+    assert result.reason == FailoverReason.SERVER_ERROR
+    assert result.recovery.should_retry is True
+    assert result.recovery.should_fallback is True
