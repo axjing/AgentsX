@@ -7,13 +7,18 @@ import pytest
 
 from agentsx.agent import Agent, run_agent_loop
 from agentsx.core.types import (
+    AgentEndEvent,
     AgentEvent,
     AgentMessage,
+    AgentStartEvent,
     ErrorEvent,
     MessageRole,
     ModelRequestEvent,
     ModelResponseEvent,
+    TextDeltaEvent,
     TextStreamEvent,
+    TurnEndEvent,
+    TurnStartEvent,
 )
 from agentsx.provider import Model, Provider
 from agentsx.tools import ToolRegistry, tool
@@ -66,19 +71,28 @@ class TestRunAgentLoop:
         async for event in run_agent_loop(provider, msgs):
             events.append(event)
 
-        assert len(events) == 4
-        assert isinstance(events[0], ModelRequestEvent)
-        assert events[0].model == "test"
-        assert isinstance(events[1], ModelResponseEvent)
-        assert events[1].delta is True
-        assert events[1].content == "Hello"
-        assert isinstance(events[2], ModelResponseEvent)
-        assert events[2].delta is True
-        assert events[2].content == " world"
-        assert isinstance(events[3], ModelResponseEvent)
-        assert events[3].delta is False
-        assert events[3].content == "Hello world"
-        assert events[3].step == 1
+        # AgentStart, TurnStart, ModelRequest, 2x(TextDelta+ModelResponse delta),
+        # ModelResponse final, TurnEnd(no tools), AgentEnd = 10 events
+        assert len(events) == 10
+        assert isinstance(events[0], AgentStartEvent)
+        assert isinstance(events[1], TurnStartEvent)
+        assert isinstance(events[2], ModelRequestEvent)
+        assert events[2].model == "test"
+        assert isinstance(events[3], TextDeltaEvent)
+        assert isinstance(events[4], ModelResponseEvent)
+        assert events[4].delta is True
+        assert events[4].content == "Hello"
+        assert isinstance(events[5], TextDeltaEvent)
+        assert isinstance(events[6], ModelResponseEvent)
+        assert events[6].delta is True
+        assert events[6].content == " world"
+        assert isinstance(events[7], ModelResponseEvent)
+        assert events[7].delta is False
+        assert events[7].content == "Hello world"
+        assert events[7].step == 1
+        assert isinstance(events[8], TurnEndEvent)
+        assert events[8].had_tool_calls is False
+        assert isinstance(events[9], AgentEndEvent)
 
         assert len(msgs) == 2
         assert msgs[1].role == MessageRole.ASSISTANT
@@ -95,11 +109,13 @@ class TestRunAgentLoop:
         async for event in run_agent_loop(provider, msgs):
             events.append(event)
 
-        assert len(events) == 2
-        assert isinstance(events[0], ModelRequestEvent)
-        assert isinstance(events[1], ModelResponseEvent)
-        assert events[1].delta is False
-        assert events[1].content == ""
+        # AgentStart, TurnStart, ModelRequest, ModelResponse final, TurnEnd, AgentEnd
+        assert len(events) == 6
+        assert isinstance(events[0], AgentStartEvent)
+        assert isinstance(events[2], ModelRequestEvent)
+        assert isinstance(events[3], ModelResponseEvent)
+        assert events[3].delta is False
+        assert events[3].content == ""
 
     @pytest.mark.asyncio
     async def test_provider_error(self) -> None:
@@ -109,11 +125,13 @@ class TestRunAgentLoop:
         async for event in run_agent_loop(provider, msgs):
             events.append(event)
 
-        assert len(events) == 2
-        assert isinstance(events[0], ModelRequestEvent)
-        assert isinstance(events[1], ErrorEvent)
-        assert "retries exhausted" in str(events[1].error)
-        assert "FailoverReason.UNKNOWN" in events[1].context
+        # AgentStart, TurnStart, ModelRequest, ErrorEvent (early return, no AgentEnd)
+        assert len(events) == 4
+        assert isinstance(events[0], AgentStartEvent)
+        assert isinstance(events[2], ModelRequestEvent)
+        assert isinstance(events[3], ErrorEvent)
+        assert "retries exhausted" in str(events[3].error)
+        assert "FailoverReason.UNKNOWN" in events[3].context
 
 
 class TestAgent:
@@ -127,11 +145,15 @@ class TestAgent:
         async for event in agent.run("Hi"):
             events.append(event)
 
-        assert len(events) == 4
-        assert isinstance(events[0], ModelRequestEvent)
-        assert isinstance(events[-1], ModelResponseEvent)
-        assert not events[-1].delta
-        assert events[-1].content == "Hello world"
+        assert len(events) == 10
+        assert isinstance(events[2], ModelRequestEvent)
+        assert isinstance(events[-1], AgentEndEvent)
+        assert events[-1].reason == "completed"
+        # Find the final non-delta ModelResponseEvent
+        final_response = [
+            e for e in events if isinstance(e, ModelResponseEvent) and not e.delta
+        ][0]
+        assert final_response.content == "Hello world"
 
     @pytest.mark.asyncio
     async def test_system_prompt_included(self) -> None:
@@ -174,4 +196,4 @@ class TestAgent:
         events: list[AgentEvent] = []
         async for event in run_agent_loop(provider, msgs, tools=registry):
             events.append(event)
-        assert len(events) == 4
+        assert len(events) == 10

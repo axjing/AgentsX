@@ -31,8 +31,10 @@ from agentsx.config import get_settings
 from agentsx.context.compaction import compact_messages, should_compact
 from agentsx.core.tool_result import ToolResultStatus
 from agentsx.core.types import (
+    AgentEndEvent,
     AgentEvent,
     AgentMessage,
+    AgentStartEvent,
     CompactionEvent,
     Decision,
     ErrorEvent,
@@ -41,11 +43,15 @@ from agentsx.core.types import (
     ModelResponseEvent,
     PromptEvent,
     StreamEvent,
+    TextDeltaEvent,
     TextStreamEvent,
     ToolCall,
     ToolCallStreamEvent,
     ToolExecutionEvent,
+    ToolExecutionStartEvent,
     ToolResult,
+    TurnEndEvent,
+    TurnStartEvent,
 )
 from agentsx.extensions.api import (
     EVENT_ON_ERROR,
@@ -127,6 +133,8 @@ async def run_agent_loop(
     step = 0
     loop_start = time.monotonic()
 
+    yield AgentStartEvent(model=provider.model.id, step=0)
+
     while step < max_steps:
         # Wall-clock timeout check
         if timeout > 0 and (time.monotonic() - loop_start) >= timeout:
@@ -160,6 +168,7 @@ async def run_agent_loop(
 
         step += 1
         logger.debug("Agent loop step %d", step)
+        yield TurnStartEvent(turn=step)
 
         # ── Extension: loop start ─────────────────────────────────────
         if extensions is not None:
@@ -196,6 +205,7 @@ async def run_agent_loop(
             async for event in provider_stream:
                 if isinstance(event, TextStreamEvent):
                     content_parts.append(event.text)
+                    yield TextDeltaEvent(text=event.text)
                     if extensions is not None:
                         await extensions.emit(
                             ExtensionEvent(
@@ -282,6 +292,7 @@ async def run_agent_loop(
 
         # ── Tool call execution ───────────────────────────────────────
         if not pending_calls:
+            yield TurnEndEvent(turn=step, had_tool_calls=False)
             break  # no tools → loop is done
 
         if tools is None:
@@ -296,6 +307,9 @@ async def run_agent_loop(
 
         for tc_event in pending_calls:
             tc = tc_event.tool_call
+
+            # ── Tool execution start ──────────────────────────────────
+            yield ToolExecutionStartEvent(tool_name=tc.name, tool_call_id=tc.id)
 
             # ── Extension: tool call ──────────────────────────────────
             if extensions is not None:
@@ -378,6 +392,9 @@ async def run_agent_loop(
                 ),
             )
 
+        # ── Turn end (after tool executions) ──────────────────────────
+        yield TurnEndEvent(turn=step, had_tool_calls=True)
+
         # ── Extension: loop end (step complete) ───────────────────────
         if extensions is not None:
             await extensions.emit(
@@ -411,6 +428,9 @@ async def run_agent_loop(
                     consumed + len(steer_queue),
                     len(steer_queue),
                 )
+
+    reason = "completed" if step < max_steps else "max_steps"
+    yield AgentEndEvent(step=step, reason=reason)
 
 
 class _Sentinel:

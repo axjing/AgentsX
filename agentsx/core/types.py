@@ -425,13 +425,85 @@ class ErrorEvent:
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
+@dataclass
+class AgentStartEvent:
+    """Emitted when the agent loop begins."""
+
+    model: str
+    step: int
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+@dataclass
+class AgentEndEvent:
+    """Emitted when the agent loop completes."""
+
+    step: int
+    reason: str
+    """``"completed"`` (no tool calls), ``"max_steps"``, or ``"error"``."""
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+@dataclass
+class TurnStartEvent:
+    """Emitted at the start of each agent turn."""
+
+    turn: int
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+@dataclass
+class TurnEndEvent:
+    """Emitted at the end of each agent turn."""
+
+    turn: int
+    had_tool_calls: bool
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+@dataclass
+class TextDeltaEvent:
+    """A single text token from the model response."""
+
+    text: str
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+@dataclass
+class RetryEvent:
+    """Emitted when a provider retry/backoff occurs."""
+
+    attempt: int
+    max_attempts: int
+    reason: str
+    delay: float
+    """Seconds until next retry."""
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+@dataclass
+class ToolExecutionStartEvent:
+    """Emitted before a tool call is executed."""
+
+    tool_name: str
+    tool_call_id: str
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 AgentEvent = (
-    ModelRequestEvent
+    AgentStartEvent
+    | AgentEndEvent
+    | TurnStartEvent
+    | TurnEndEvent
+    | ModelRequestEvent
+    | TextDeltaEvent
     | ModelResponseEvent
+    | ToolExecutionStartEvent
     | ToolExecutionEvent
     | ErrorEvent
     | CompactionEvent
     | PromptEvent
+    | RetryEvent
 )
 """Union type for all agent events. Consumers use ``isinstance()`` to dispatch."""
 
