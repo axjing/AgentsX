@@ -27,6 +27,7 @@ import logging
 import time
 from collections import deque
 from collections.abc import AsyncIterator
+from typing import TypeAlias
 
 from agentsx.config import get_settings
 from agentsx.context.compaction import compact_messages, should_compact
@@ -43,6 +44,7 @@ from agentsx.core.types import (
     ModelRequestEvent,
     ModelResponseEvent,
     PromptEvent,
+    RetryEvent,
     StreamEvent,
     TextDeltaEvent,
     TextStreamEvent,
@@ -70,6 +72,8 @@ from agentsx.security.policy import ExecutionPolicy
 from agentsx.tools import ToolRegistry
 
 logger = logging.getLogger(__name__)
+
+_StreamOrRetry: TypeAlias = StreamEvent | RetryEvent
 
 
 # Maximum steer messages consumed per loop iteration (prevents unbounded
@@ -217,6 +221,8 @@ async def run_agent_loop(
                     yield ModelResponseEvent(content=event.text, delta=True)
                 elif isinstance(event, ToolCallStreamEvent):
                     pending_calls.append(event)
+                elif isinstance(event, RetryEvent):
+                    yield event
         except TimeoutError as te:
             yield ErrorEvent(
                 error=te,
@@ -442,16 +448,16 @@ _STEP_DONE = _Sentinel()
 
 
 async def _wrap_step_timeout(
-    stream: AsyncIterator[StreamEvent],
+    stream: AsyncIterator[StreamEvent | RetryEvent],
     timeout_seconds: float,
-) -> AsyncIterator[StreamEvent]:
+) -> AsyncIterator[_StreamOrRetry]:
     """Wrap a provider stream with a per-step timeout.
 
     Uses a sentinel value pushed to an ``asyncio.Queue`` so that the
     consumer never blocks longer than *timeout_seconds* between events,
     but finishes immediately when the source stream ends.
     """
-    queue: asyncio.Queue[StreamEvent | Exception | _Sentinel] = asyncio.Queue()
+    queue: asyncio.Queue[_StreamOrRetry | Exception | _Sentinel] = asyncio.Queue()
 
     async def _drain() -> None:
         """Read from the source stream and forward to the queue."""

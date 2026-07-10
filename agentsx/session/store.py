@@ -27,7 +27,11 @@ from typing import Any
 from uuid import uuid4
 
 from agentsx.config import get_settings
-from agentsx.context.compaction_entry import CompactionEntry
+from agentsx.context.compaction_entry import (
+    CompactionEntry,
+    load_compaction_entries,
+    replay_messages,
+)
 from agentsx.context.compaction_entry import (
     append_compaction_entry as _append_compaction_entry,
 )
@@ -117,10 +121,11 @@ class SessionStore:
             return _deserialize_session(json.load(f))
 
     def get_messages(self, session_id: str) -> list[AgentMessage]:
-        """Load all messages for a session.
+        """Load all messages for a session, applying compaction replay.
 
         Uses memory cache when available; falls back to disk read.
-        Cache entries are moved to end on access (LRU).
+        If ``compaction.jsonl`` exists, replays compacted regions to
+        produce a context-ready message list.
         """
         if session_id in self._message_cache:
             self._message_cache.move_to_end(session_id)
@@ -135,6 +140,13 @@ class SessionStore:
                 stripped = line.strip()
                 if stripped:
                     messages.append(_deserialize_message(json.loads(stripped)))
+
+        # Apply compaction replay if compaction.jsonl exists
+        compaction_path = self._session_dir(session_id) / "compaction.jsonl"
+        if compaction_path.is_file():
+            entries = load_compaction_entries(compaction_path)
+            messages = replay_messages(messages, entries)
+
         # Populate cache
         self._message_cache[session_id] = messages
         self._evict_cache()

@@ -7,7 +7,67 @@ tuple so the caller can update its state.
 """
 
 from agentsx.core.errors import SessionError
+from agentsx.core.types import AgentMessage
 from agentsx.session.store import SessionStore
+
+
+def cmd_compact(
+    store: SessionStore,
+    session_id: str,
+    messages: list[AgentMessage],
+    force: bool = False,
+) -> tuple[str, int]:
+    """Trigger manual context compaction.
+
+    Args:
+        store: SessionStore instance.
+        session_id: Current session ID.
+        messages: Current conversation messages (replaced on success).
+        force: If True, skip the ``should_compact()`` threshold check.
+
+    Returns:
+        (status_message, new_message_count).
+    """
+    from agentsx.context.compaction import (  # noqa: PLC0415
+        compact_messages,
+        should_compact,
+    )
+
+    if not force and not should_compact(messages):
+        return (
+            f"No compaction needed ({len(messages)} messages). "
+            "Use /compact force to override.",
+            len(messages),
+        )
+
+    old_count = len(messages)
+    compacted = compact_messages(messages)
+    new_count = len(compacted)
+
+    if new_count >= old_count:
+        return "No messages could be compacted.", old_count
+
+    # Record compaction entry in the session store
+    replaced_ids = [m.id for m in messages[: old_count - new_count + 1]]
+    summary = compacted[1].content if len(compacted) > 1 else "Context compacted"
+    try:
+        store.append_compaction_entry(
+            session_id,
+            replaces_ids=replaced_ids,
+            summary=summary,
+        )
+    except SessionError:
+        pass  # Session may not be persisted yet — skip silently
+
+    # Replace in-memory messages
+    messages.clear()
+    messages.extend(compacted)
+
+    return (
+        f"Compacted: {old_count} → {new_count} messages "
+        f"(saved {old_count - new_count})",
+        new_count,
+    )
 
 
 def cmd_sessions(
@@ -148,6 +208,7 @@ def cmd_help() -> str:
         "  /delete <id>              Delete a session\n"
         "  /branch <id> [title]      Branch from a session\n"
         "  /title <name>             Rename current session\n"
+        "  /compact [force]          Manually compact context\n"
         "  /clear                    Clear conversation history\n"
         "  /help                     Show this message\n"
         "  /exit, /quit              Exit the chat"

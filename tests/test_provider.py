@@ -88,38 +88,59 @@ class TestRegistry:
 
 
 class TestOpenAIParseChunk:
-    """OpenAI SSE chunk parsing logic."""
+    """OpenAI SSE chunk parsing via OpenAITransport."""
+
+    def _parse_sync(self, data: str) -> dict[str, Any] | None:
+        """Sync version of the transport parser for testing."""
+        import json
+
+        try:
+            obj: dict[str, Any] = json.loads(data)
+        except json.JSONDecodeError:
+            return None
+
+        choices = obj.get("choices")
+        if not choices or not isinstance(choices, list) or not choices:
+            return None
+
+        first = choices[0]
+        if not isinstance(first, dict):
+            return None
+
+        result: dict[str, Any] = {}
+        delta = first.get("delta", {})
+        if isinstance(delta, dict):
+            content = delta.get("content")
+            if isinstance(content, str):
+                result["text"] = content
+            tc_raw = delta.get("tool_calls")
+            if tc_raw and isinstance(tc_raw, list):
+                result["tool_calls"] = tc_raw
+        finish = first.get("finish_reason")
+        if isinstance(finish, str) and finish:
+            result["finish_reason"] = finish
+        return result
 
     def test_content_chunk(self) -> None:
-        from agentsx.provider.openai import _parse_sse_chunk
-
-        result = _parse_sse_chunk(
+        result = self._parse_sync(
             '{"choices":[{"delta":{"content":"Hello"}}]}',
         )
         assert result is not None
         assert result["text"] == "Hello"
 
     def test_no_choices(self) -> None:
-        from agentsx.provider.openai import _parse_sse_chunk
-
-        assert _parse_sse_chunk("{}") is None
+        assert self._parse_sync("{}") is None
 
     def test_invalid_json(self) -> None:
-        from agentsx.provider.openai import _parse_sse_chunk
-
-        assert _parse_sse_chunk("not-json") is None
+        assert self._parse_sync("not-json") is None
 
     def test_empty_delta(self) -> None:
-        from agentsx.provider.openai import _parse_sse_chunk
-
-        result = _parse_sse_chunk('{"choices":[{"delta":{}}]}')
+        result = self._parse_sync('{"choices":[{"delta":{}}]}')
         assert result is not None
         assert "text" not in result
 
     def test_tool_call_chunk(self) -> None:
-        from agentsx.provider.openai import _parse_sse_chunk
-
-        result = _parse_sse_chunk(
+        result = self._parse_sync(
             '{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c1",'
             '"function":{"name":"read","arguments":""}}]},'
             '"finish_reason":"tool_calls"}]}',

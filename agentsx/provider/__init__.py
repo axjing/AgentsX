@@ -16,7 +16,7 @@ from typing import Any
 
 from agentsx.config import get_settings
 from agentsx.core.errors import ProviderError, RetryExhaustedError
-from agentsx.core.types import AgentMessage, StreamEvent
+from agentsx.core.types import AgentMessage, RetryEvent, StreamEvent
 from agentsx.provider.profile import ProviderProfile, get_profile, resolve_provider_name
 from agentsx.tools import ToolRegistry
 
@@ -86,7 +86,7 @@ class Provider(ABC):
     async def stream_with_retry(
         self,
         messages: list[AgentMessage],
-    ) -> AsyncIterator[StreamEvent]:
+    ) -> AsyncIterator[StreamEvent | RetryEvent]:
         """Stream with exponential backoff retry on transient errors.
 
         Retries on:
@@ -97,6 +97,10 @@ class Provider(ABC):
             - HTTP 401 (auth error)
             - HTTP 400 (bad request)
             - Other client errors
+
+        Yields:
+            ``StreamEvent`` items from the provider stream, plus
+            ``RetryEvent`` items when a retry/backoff occurs.
         """
         settings = get_settings()
         max_retries = settings.provider_retry_count
@@ -119,6 +123,12 @@ class Provider(ABC):
                         delay,
                         exc,
                     )
+                    yield RetryEvent(
+                        attempt=attempt + 1,
+                        max_attempts=max_retries,
+                        reason="provider error",
+                        delay=delay,
+                    )
                     await asyncio.sleep(delay)
                     continue
                 raise
@@ -133,6 +143,12 @@ class Provider(ABC):
                         max_retries,
                         delay,
                         exc,
+                    )
+                    yield RetryEvent(
+                        attempt=attempt + 1,
+                        max_attempts=max_retries,
+                        reason="unexpected error",
+                        delay=delay,
                     )
                     await asyncio.sleep(delay)
                     continue

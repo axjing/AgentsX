@@ -75,6 +75,9 @@ class ProviderProfile:
     requires_tools_on_first_turn: bool = False
     """Some providers (e.g. Anthropic) require tools on the first turn."""
 
+    anthropic_version: str = ""
+    """Anthropic API version header value (only for Anthropic profiles)."""
+
     rate_limit_rpm: int = 0
     """Requests per minute rate limit (0 = unknown / no limit)."""
 
@@ -118,6 +121,7 @@ ANTHROPIC_PROFILE = ProviderProfile(
     default_model="claude-sonnet-4-20250514",
     context_window=200_000,
     supports_vision=True,
+    anthropic_version="2023-06-01",
     requires_tools_on_first_turn=True,
     model_prefix="claude-",
     extra_headers={"anthropic-version": "2023-06-01"},

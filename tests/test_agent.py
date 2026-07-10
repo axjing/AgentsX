@@ -15,6 +15,7 @@ from agentsx.core.types import (
     MessageRole,
     ModelRequestEvent,
     ModelResponseEvent,
+    RetryEvent,
     TextDeltaEvent,
     TextStreamEvent,
     TurnEndEvent,
@@ -125,13 +126,15 @@ class TestRunAgentLoop:
         async for event in run_agent_loop(provider, msgs):
             events.append(event)
 
-        # AgentStart, TurnStart, ModelRequest, ErrorEvent (early return, no AgentEnd)
-        assert len(events) == 4
+        # AgentStart, TurnStart, ModelRequest, 3x RetryEvent, ErrorEvent
+        assert len(events) == 7
         assert isinstance(events[0], AgentStartEvent)
         assert isinstance(events[2], ModelRequestEvent)
-        assert isinstance(events[3], ErrorEvent)
-        assert "retries exhausted" in str(events[3].error)
-        assert "FailoverReason.UNKNOWN" in events[3].context
+        for i in (3, 4, 5):
+            assert isinstance(events[i], RetryEvent)
+        assert isinstance(events[6], ErrorEvent)
+        assert "retries exhausted" in str(events[6].error)
+        assert "FailoverReason.UNKNOWN" in events[6].context
 
 
 class TestAgent:

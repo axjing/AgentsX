@@ -117,5 +117,11 @@ def handle_command(
         console.print(msg)
         return None, model_name
 
+    if command == "/compact":
+        force = len(parts) >= 2 and parts[1].lower() == "force"
+        msg, new_count = commands.cmd_compact(store, session_id, messages, force=force)
+        console.print(msg)
+        return None, model_name
+
     console.print(f"[yellow]Unknown command: {command}.  Try /help[/yellow]")
     return None, model_name
