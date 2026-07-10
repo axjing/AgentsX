@@ -93,6 +93,18 @@ class SQLiteSessionStore:
         CREATE INDEX IF NOT EXISTS idx_messages_session
             ON messages(session_id, msg_index);
 
+        CREATE TABLE IF NOT EXISTS compaction_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT NOT NULL REFERENCES sessions(id),
+            replaces_ids TEXT NOT NULL,
+            summary TEXT NOT NULL,
+            token_estimate INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_compaction_session
+            ON compaction_entries(session_id);
+
         CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts
             USING fts5(content, session_id, tokenize='porter unicode61');
 
@@ -483,3 +495,70 @@ class SQLiteSessionStore:
             tool_call_id=row["tool_call_id"],
             name=row["name"],
         )
+
+    def append_compaction_entry(
+        self,
+        session_id: str,
+        replaces_ids: list[str],
+        summary: str,
+        token_estimate: int = 0,
+    ) -> None:
+        """Record a compaction entry without modifying messages.
+
+        Args:
+            session_id: The session to record compaction for.
+            replaces_ids: Message IDs being replaced.
+            summary: Summary of the compacted messages.
+            token_estimate: Token count of replaced messages.
+
+        Raises:
+            SessionError: If the session does not exist.
+        """
+        with self._lock:
+            exists = self._db.execute(
+                "SELECT 1 FROM sessions WHERE id = ?",
+                (session_id,),
+            ).fetchone()
+            if exists is None:
+                msg = f"Session not found: {session_id}"
+                raise SessionError(msg)
+
+            now = datetime.now(timezone.utc).isoformat()
+            self._db.execute(
+                "INSERT INTO compaction_entries "
+                "(session_id, replaces_ids, summary, token_estimate, created_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (
+                    session_id,
+                    json.dumps(replaces_ids),
+                    summary,
+                    token_estimate,
+                    now,
+                ),
+            )
+            self._db.commit()
+
+    def get_compaction_entries(
+        self,
+        session_id: str,
+    ) -> list[tuple[list[str], str, int]]:
+        """Load all compaction entries for a session.
+
+        Args:
+            session_id: The session to query.
+
+        Returns:
+            List of (replaces_ids, summary, token_estimate) tuples.
+        """
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT replaces_ids, summary, token_estimate "
+                "FROM compaction_entries WHERE session_id = ? "
+                "ORDER BY id",
+                (session_id,),
+            ).fetchall()
+
+        return [
+            (json.loads(r["replaces_ids"]), r["summary"], r["token_estimate"])
+            for r in rows
+        ]

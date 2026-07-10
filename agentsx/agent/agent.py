@@ -1,8 +1,8 @@
-"""High-level `Agent` class wrapping the loop for convenient use."""
+"""High-level `Agent` class wrapping `AgentHarness` for convenient use."""
 
 from collections.abc import AsyncIterator
 
-from agentsx.agent.loop import run_agent_loop
+from agentsx.agent.harness import AgentHarness
 from agentsx.config import get_settings
 from agentsx.core.types import AgentEvent, AgentMessage, MessageRole
 from agentsx.extensions.api import ExtensionAPI
@@ -12,9 +12,9 @@ from agentsx.tools import ToolRegistry
 
 
 class Agent:
-    """Convenience wrapper around `run_agent_loop()`.
+    """Convenience wrapper around ``AgentHarness``.
 
-    Maintains an internal message history so that multiple `run()`
+    Maintains an internal message history so that multiple ``run()``
     calls share the same conversation context.
 
     Usage::
@@ -42,24 +42,30 @@ class Agent:
         self._tools = tools
         self._policy = policy
         self._extensions = extensions
-        self._messages: list[AgentMessage] = []
+        self._harness: AgentHarness | None = None
 
     # ── Public API ──────────────────────────────────────────────────
 
     @property
     def messages(self) -> list[AgentMessage]:
         """Read-only access to the current conversation history."""
-        return list(self._messages)
+        if self._harness is not None:
+            return self._harness.messages
+        return list(self._messages) if hasattr(self, "_messages") else []
 
     def clear_history(self) -> None:
-        """Clear the conversation history, keeping the system message."""
-        has_system = bool(
-            self._messages and self._messages[0].role == MessageRole.SYSTEM,
-        )
-        system = self._messages[0] if has_system else None
-        self._messages.clear()
-        if system:
-            self._messages.append(system)
+        """Clear the conversation history, keeping the system prompt."""
+        if self._harness is not None:
+            self._harness.clear_history()
+        else:
+            self._ensure_messages()
+            has_system = bool(
+                self._messages and self._messages[0].role == MessageRole.SYSTEM,
+            )
+            system = self._messages[0] if has_system else None
+            self._messages.clear()
+            if system:
+                self._messages.append(system)
 
     async def run(
         self,
@@ -77,25 +83,11 @@ class Agent:
         Yields:
             `AgentEvent` items from the agent loop.
         """
-        if not self._messages:
-            self._messages = self._build_messages()
-        self._messages.append(
-            AgentMessage(role=MessageRole.USER, content=user_input),
-        )
-
-        provider = self._resolve_provider()
-        async for event in run_agent_loop(
-            provider,
-            self._messages,
-            max_steps,
-            tools=self._tools,
-            policy=self._policy,
-            extensions=self._extensions,
-            timeout=timeout,
-        ):
+        harness = self._get_harness(max_steps=max_steps)
+        async for event in harness.prompt(user_input, timeout=timeout):
             yield event
 
-    # ── Internals ─────────────────────────────────────────────────────────────────
+    # ── Internals ───────────────────────────────────────────────────
 
     def _resolve_provider(self) -> Provider:
         if self._provider is not None:
@@ -105,13 +97,35 @@ class Agent:
             model_name=self._model_name or settings.model_name,
         )
 
-    def _build_messages(self) -> list[AgentMessage]:
-        messages: list[AgentMessage] = []
+    def _build_system_prompt(self) -> str:
         prompt = self._system_prompt
         if prompt is None:
             prompt = get_settings().system_prompt
-        if prompt:
-            messages.append(
-                AgentMessage(role=MessageRole.SYSTEM, content=prompt),
+        return prompt
+
+    def _get_harness(self, max_steps: int | None) -> AgentHarness:
+        """Lazy-create the AgentHarness on first run()."""
+        if self._harness is None:
+            provider = self._resolve_provider()
+            settings = get_settings()
+            self._harness = AgentHarness(
+                provider=provider,
+                system_prompt=self._build_system_prompt(),
+                tools=self._tools,
+                policy=self._policy,
+                extensions=self._extensions,
+                max_steps=max_steps or settings.max_steps,
             )
-        return messages
+        return self._harness
+
+    def _ensure_messages(self) -> list[AgentMessage]:
+        """Legacy fallback for direct message access before harness creation."""
+        if not hasattr(self, "_messages"):
+            system = self._build_system_prompt()
+            msgs: list[AgentMessage] = []
+            if system:
+                msgs.append(
+                    AgentMessage(role=MessageRole.SYSTEM, content=system),
+                )
+            self._messages = msgs
+        return self._messages

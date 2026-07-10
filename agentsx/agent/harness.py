@@ -3,6 +3,10 @@
 AgentHarness owns the transcript, cancellation, event listeners,
 and message queues (steering + follow-up).  Execution is delegated
 to the pure ``run_agent_loop()`` async generator.
+
+Supports optional context compaction via a ``SessionStore``:
+when a store is attached, ``compact()`` triggers the store's
+compaction entry recording and replaces in-memory messages.
 """
 
 import logging
@@ -49,6 +53,8 @@ class AgentHarness:
         policy: ExecutionPolicy | None = None,
         extensions: ExtensionAPI | None = None,
         max_steps: int | None = None,
+        session_store: object | None = None,
+        session_id: str = "",
     ) -> None:
         """Initialise the harness.
 
@@ -59,6 +65,8 @@ class AgentHarness:
             policy: Optional security policy for tool-call gating.
             extensions: Optional extension API for lifecycle hooks.
             max_steps: Maximum tool-calling iterations per turn.
+            session_store: Optional session store for compaction.
+            session_id: Session ID for compaction entry recording.
         """
         self._provider = provider
         self._system_prompt = system_prompt
@@ -66,6 +74,8 @@ class AgentHarness:
         self._policy = policy
         self._extensions = extensions
         self._max_steps = max_steps
+        self._session_store = session_store
+        self._session_id = session_id
         self._messages: list[AgentMessage] = []
         self._cancelled = False
         self._listeners: list[EventListener] = []
@@ -170,6 +180,61 @@ class AgentHarness:
         completes and will not process any queued follow-up messages.
         """
         self._cancelled = True
+
+    def compact(self, force: bool = False) -> tuple[str, int]:
+        """Trigger context compaction on the current message list.
+
+        If a session store is attached, records the compaction entry.
+
+        Args:
+            force: If True, skip the ``should_compact()`` threshold check.
+
+        Returns:
+            (status_message, new_message_count).
+        """
+        from agentsx.context.compaction import (  # noqa: PLC0415
+            compact_messages,
+            should_compact,
+        )
+        from agentsx.core.errors import SessionError  # noqa: PLC0415
+
+        if not force and not should_compact(self._messages):
+            return (
+                f"No compaction needed ({len(self._messages)} messages). "
+                "Use compact(force=True) to override.",
+                len(self._messages),
+            )
+
+        old_count = len(self._messages)
+        compacted = compact_messages(self._messages)
+        new_count = len(compacted)
+
+        if new_count >= old_count:
+            return "No messages could be compacted.", old_count
+
+        # Record compaction entry if session store is attached
+        if self._session_store and self._session_id:
+            replaced_ids = [m.id for m in self._messages[: old_count - new_count + 1]]
+            summary = (
+                compacted[1].content if len(compacted) > 1 else "Context compacted"
+            )
+            try:
+                self._session_store.append_compaction_entry(  # type: ignore[attr-defined]
+                    self._session_id,
+                    replaces_ids=replaced_ids,
+                    summary=summary,
+                )
+            except SessionError:
+                pass
+
+        self._messages.clear()
+        self._messages.extend(compacted)
+
+        return (
+            f"Compacted: {old_count} → {new_count} messages "
+            f"(saved {old_count - new_count})",
+            new_count,
+        )
 
     def clear_history(self) -> None:
         """Clear message history, preserving the system prompt.

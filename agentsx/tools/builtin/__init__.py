@@ -6,6 +6,7 @@ Tools are organized by risk level:
     - exec/: Shell command execution
     - web/: Network fetch/search tools
     - orchestration/: Sub-agent spawning
+    - mcp/: External MCP server tool calls
 
 All tools are exposed via the ``ALL_TOOLS`` constant for easy registration::
 
@@ -14,6 +15,7 @@ All tools are exposed via the ``ALL_TOOLS`` constant for easy registration::
 """
 
 from agentsx.tools.builtin.exec.shell import tool_bash
+from agentsx.tools.builtin.mcp.mcp_client import tool_mcp_call
 from agentsx.tools.builtin.orchestration.subagent import spawn_agent
 from agentsx.tools.builtin.read.filesystem import (
     tool_file_glob,
@@ -36,6 +38,7 @@ ALL_TOOLS = [
     tool_web_fetch,
     tool_web_search,
     spawn_agent,
+    tool_mcp_call,
 ]
 
 __all__ = [
@@ -49,4 +52,5 @@ __all__ = [
     "spawn_agent",
     "tool_web_fetch",
     "tool_web_search",
+    "tool_mcp_call",
 ]
