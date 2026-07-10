@@ -19,6 +19,12 @@ def test_context_profile_frozen() -> None:
         toolset_filter=frozenset({"read", "write"}),
     )
     assert dataclasses.is_dataclass(profile)
+    # Verify immutability: mutation should raise
+    try:
+        profile.name = "changed"
+        raise AssertionError("Should be frozen")
+    except (TypeError, AttributeError, dataclasses.FrozenInstanceError):
+        pass
 
 
 def test_resolve_runtime_mode_in_git_repo() -> None:
@@ -37,7 +43,7 @@ def test_resolve_runtime_mode_empty_dir() -> None:
 def test_runtime_mode_toolset_filter() -> None:
     """Coding profile should have a non-empty toolset filter."""
     mode = resolve_runtime_mode(cwd="d:/An/CODE/AgentsX")
-    assert mode.toolset_filter is not None
+    assert mode.toolset_filter == frozenset({"read", "write", "exec", "orchestration"})
 
 
 def test_context_profile_registry() -> None:

@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
-# Maximum number of directory entries to scan for source files.
 _SOURCE_EXTENSIONS = {
     ".py",
     ".ts",
@@ -28,8 +27,6 @@ _SOURCE_EXTENSIONS = {
     ".fsx",
     ".php",
     ".sh",
-    ".bash",
-    ".zsh",
     ".lua",
     ".r",
     ".R",
@@ -39,6 +36,7 @@ _SOURCE_EXTENSIONS = {
     ".svelte",
 }
 
+# Maximum number of directory entries to scan for source files.
 _SCAN_MAX_ENTRIES = 50
 
 
