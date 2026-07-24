@@ -4,8 +4,9 @@ from collections.abc import AsyncIterator
 
 from agentsx.agent.harness import AgentHarness
 from agentsx.config import get_settings
-from agentsx.core.types import AgentEvent, AgentMessage, MessageRole
 from agentsx.extensions.api import ExtensionAPI
+from agentsx.protocol.events import AgentEvent
+from agentsx.protocol.messages import AgentMessage, MessageRole
 from agentsx.provider import Provider, create_provider
 from agentsx.security.policy import ExecutionPolicy
 from agentsx.tools import ToolRegistry

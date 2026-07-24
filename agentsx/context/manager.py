@@ -14,7 +14,7 @@ Usage::
 from agentsx.context.compaction import compact_messages, should_compact
 from agentsx.context.summarizer import ContextSummarizer, SummaryResult
 from agentsx.context.trajectory import Trajectory
-from agentsx.core.types import AgentMessage
+from agentsx.protocol.messages import AgentMessage
 
 
 class ContextManager:

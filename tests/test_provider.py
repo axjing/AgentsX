@@ -5,8 +5,9 @@ from typing import Any
 
 import pytest
 
-from agentsx.core.errors import ProviderError
-from agentsx.core.types import AgentMessage, StreamEvent
+from agentsx.protocol.errors import ProviderError
+from agentsx.protocol.messages import AgentMessage
+from agentsx.protocol.events import StreamEvent
 from agentsx.provider import (
     _PROVIDER_REGISTRY,
     Model,
@@ -58,7 +59,7 @@ class TestRegistry:
                 messages: list[AgentMessage],
             ) -> AsyncIterator[StreamEvent]:
                 for m in messages:
-                    from agentsx.core.types import TextStreamEvent
+                    from agentsx.protocol.events import TextStreamEvent
 
                     yield TextStreamEvent(text=str(m.content))
 

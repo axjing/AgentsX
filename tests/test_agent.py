@@ -6,20 +6,23 @@ from typing import Any
 import pytest
 
 from agentsx.agent import Agent, run_agent_loop
-from agentsx.core.types import (
+from agentsx.protocol.events import (
     AgentEndEvent,
     AgentEvent,
-    AgentMessage,
     AgentStartEvent,
     ErrorEvent,
-    MessageRole,
     ModelRequestEvent,
     ModelResponseEvent,
     RetryEvent,
     TextDeltaEvent,
     TextStreamEvent,
+    ToolExecutionEvent,
     TurnEndEvent,
     TurnStartEvent,
+)
+from agentsx.protocol.messages import (
+    AgentMessage,
+    MessageRole,
 )
 from agentsx.provider import Model, Provider
 from agentsx.tools import ToolRegistry, tool

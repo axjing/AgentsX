@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from fnmatch import fnmatch
 from pathlib import Path
 
-from agentsx.core.types import Decision
+from agentsx.protocol.messages import Decision
 
 
 @dataclass

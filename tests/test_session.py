@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from agentsx.core.errors import SessionError
-from agentsx.core.types import AgentMessage, MessageRole, ToolCall
+from agentsx.protocol.errors import SessionError
+from agentsx.protocol.messages import AgentMessage, MessageRole, ToolCall
 from agentsx.session.store import Session, SessionStore
 
 

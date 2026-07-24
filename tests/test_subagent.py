@@ -12,8 +12,8 @@ from agentsx.agent.subagent import (
     SubAgentRuntime,
     _build_subagent_tools,
 )
-from agentsx.core.types import AgentMessage, MessageRole
 from agentsx.orchestrator import Orchestrator, SubAgentRecord
+from agentsx.protocol.messages import AgentMessage, MessageRole
 
 
 class TestSubAgentConfig:
@@ -78,7 +78,7 @@ class TestSubAgentRuntime:
 
         patcher = patch.object(subagent_mod, "create_provider")
         mock_factory = patcher.start()
-        from agentsx.core.types import StreamEvent, TextStreamEvent
+        from agentsx.protocol.events import StreamEvent, TextStreamEvent
         from agentsx.provider import Model, Provider
 
         class _MockProvider(Provider):
@@ -201,7 +201,7 @@ class TestOrchestrator:
         self,
         mock_factory: MagicMock,
     ) -> None:
-        from agentsx.core.types import StreamEvent, TextStreamEvent
+        from agentsx.protocol.events import StreamEvent, TextStreamEvent
         from agentsx.provider import Model, Provider
 
         class _MockProvider2(Provider):

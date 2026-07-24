@@ -6,7 +6,7 @@ from agentsx.context.compaction import (
     estimate_tokens,
     should_compact,
 )
-from agentsx.core.types import AgentMessage, MessageRole
+from agentsx.protocol.messages import AgentMessage, MessageRole
 
 
 class TestEstimateTokens:
@@ -19,7 +19,7 @@ class TestEstimateTokens:
         assert estimate_tokens("") == 0
 
     def test_message_with_tool_calls(self) -> None:
-        from agentsx.core.types import ToolCall
+        from agentsx.protocol.messages import ToolCall
 
         msg = AgentMessage(
             role=MessageRole.ASSISTANT,

@@ -5,15 +5,6 @@ from unittest.mock import patch
 
 import pytest
 
-from agentsx.core.tool_result import ToolResult, ToolResultStatus
-from agentsx.core.types import (
-    AgentMessage,
-    MessageRole,
-    StreamEvent,
-    TextStreamEvent,
-    ToolCall,
-    ToolCallStreamEvent,
-)
 from agentsx.extensions.api import (
     ALL_EVENTS,
     EVENT_ON_ERROR,
@@ -25,6 +16,18 @@ from agentsx.extensions.api import (
     EVENT_ON_TOOL_RESULT,
     ExtensionAPI,
     ExtensionEvent,
+)
+from agentsx.protocol.events import (
+    StreamEvent,
+    TextStreamEvent,
+    ToolCallStreamEvent,
+)
+from agentsx.protocol.messages import (
+    AgentMessage,
+    MessageRole,
+    ToolCall,
+    ToolResult,
+    ToolResultStatus,
 )
 
 
@@ -168,7 +171,7 @@ class TestExtensionIntegration:
 
         from collections.abc import AsyncIterator
 
-        from agentsx.core.types import ToolCallStreamEvent
+        from agentsx.protocol.events import ToolCallStreamEvent
 
         async def stream(
             messages: list[AgentMessage],

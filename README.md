@@ -7,11 +7,11 @@ A lightweight AI Agent runtime framework with ReAct loop, multi-Provider abstrac
 ## Features
 
 - **ReAct Agent Loop** -- async generator-driven think -> act -> observe -> repeat, max steps configurable
-- **Multi-Provider** -- OpenAI (with tool call delta streaming) and Anthropic (with tool use streaming), unified Provider ABC, extendable via register_provider()
-- **Built-in Tools** -- @tool() decorator + ToolRegistry auto-registration + JSON Schema generation; organized by risk level (read/write/exec/web/orchestration)
+- **Multi-Provider** -- 9 providers via profile system (OpenAI, Anthropic, Gemini, DeepSeek, Groq, OpenRouter, Ollama, vLLM, SGLang), Transport/Provider two-layer abstraction, GenericProvider covers any OpenAI-compatible endpoint
+- **Built-in Tools** -- @tool() decorator + ToolRegistry auto-registration + JSON Schema generation; organized by risk level (read/write/exec/web/orchestration/mcp)
 - **Multi-Layer Security** -- ExecutionPolicy (ALLOW/PROMPT/FORBIDDEN) + PathGuard (path traversal detection) + CommandGuard (command injection prevention) + ResourceLimits (output truncation)
-- **Context Management** -- auto context compaction (token-count + optional LLM summarization)
-- **Session Management** -- JSONL file-tree storage (~/.agentsx/sessions/), zero deps, O(1) append writes, branch support
+- **Context Management** -- auto context compaction (token-count + optional LLM summarization), CJK-aware token estimation, append-only compaction audit trail
+- **Session Management** -- JSONL file-tree (default) + SQLite with FTS5 (optional), SessionBackend Protocol, zero deps, O(1) append writes, branch support
 - **Extension API** -- ExtensionAPI observer pattern, 7 lifecycle events, exception isolation, entry_points discovery
 - **Interactive CLI** -- agentsx chat, prompt_toolkit, rich streaming, tool panels, slash commands, --workspace flag
 
@@ -61,7 +61,7 @@ agentsx chat --system "You are a coding assistant."
 ```python
 import asyncio
 from agentsx.agent.loop import run_agent_loop
-from agentsx.core.types import AgentMessage, MessageRole
+from agentsx.protocol.messages import AgentMessage, MessageRole
 from agentsx.provider import create_provider
 from agentsx.tools import ToolRegistry
 from agentsx.tools.builtin import ALL_TOOLS
@@ -101,18 +101,31 @@ async def main():
 agentsx/
 ├── __init__.py           # Package entry
 ├── config.py             # Settings (AGENTSX_* env vars)
-├── core/                 # Core types & errors
-│   ├── types.py
-│   └── errors.py
+├── protocol/             # Data contract (messages, events, errors)
+│   ├── __init__.py       # Unified re-exports
+│   ├── messages.py       # AgentMessage, ToolCall, ContentPart, ToolResult
+│   ├── events.py         # All AgentEvent / StreamEvent types
+│   └── errors.py         # Exception hierarchy + error classification
 ├── context/              # Context management
-│   └── compaction.py
-├── provider/             # LLM providers
-│   ├── __init__.py       # Provider ABC, registry
-│   ├── openai.py
-│   └── anthropic.py
-├── agent/                # Agent logic
-│   ├── loop.py           # run_agent_loop()
-│   ├── agent.py          # Agent class (multi-turn)
+│   ├── compaction.py     # Token-count based compaction (CJK-aware)
+│   ├── compaction_entry.py  # Append-only audit trail + replay
+│   ├── summarizer.py     # Semantic summaries
+│   ├── trajectory.py     # Think/tool_call/result/error tracking
+│   └── manager.py        # Unified interface
+├── provider/             # LLM provider abstraction
+│   ├── __init__.py       # Thin re-export
+│   ├── abc.py            # Provider ABC + Model class
+│   ├── converters.py     # Provider message format conversion
+│   ├── factory.py        # create_provider() factory
+│   ├── registry.py       # _PROVIDER_REGISTRY + register_provider()
+│   ├── transport.py      # ProviderTransport ABC, OpenAI/Anthropic adapters
+│   ├── generic.py        # GenericProvider (OpenAI-compatible endpoints)
+│   ├── profile.py        # 9 provider profiles (model aliases, URLs, env vars)
+│   └── retry.py          # Retry logic
+├── agent/                # Agent execution
+│   ├── loop.py           # run_agent_loop() — pure async generator
+│   ├── harness.py        # AgentHarness — stateful multi-turn wrapper
+│   ├── agent.py          # Agent convenience class
 │   └── subagent.py       # SubAgentRuntime
 ├── tools/                # Tool system
 │   ├── __init__.py       # ToolSpec, ToolRegistry, @tool()
@@ -121,20 +134,33 @@ agentsx/
 │       ├── write/          # file_write, file_edit
 │       ├── exec/           # shell (async, non-blocking)
 │       ├── web/            # web_fetch, web_search
-│       └── orchestration/  # subagent
+│       ├── orchestration/  # subagent
+│       └── mcp/            # MCP client (tool_mcp_call)
 ├── security/             # Security engine
+│   ├── __init__.py       # Exports all security classes
 │   ├── policy.py         # ExecutionPolicy, Rule
-│   ├── path_guard.py     # PathGuard
-│   ├── command_guard.py  # CommandGuard
-│   └── resource_limits.py # ResourceLimits
+│   ├── path_guard.py     # PathGuard (symlink, junction, traversal)
+│   ├── command_guard.py  # CommandGuard (injection detection)
+│   └── resource_limits.py # ResourceLimits (output truncation)
 ├── extensions/           # Extension system
-│   └── api.py
+│   └── api.py            # ExtensionAPI (observer-only, 7 events)
 ├── session/              # Session storage
-│   └── store.py
-├── orchestrator.py       # Sub-agent lifecycle
+│   ├── __init__.py       # Session, SessionStore, SQLiteSessionStore
+│   ├── store.py          # JSONL file-tree (default)
+│   ├── sqlite_store.py   # SQLite with FTS5 (optional)
+│   └── protocol.py       # SessionBackend Protocol
+├── discovery/            # File-based command/skill discovery
+│   ├── loader.py         # Frontmatter parser + directory scanner
+│   └── models.py         # DiscoveredCommand, DiscoveredSkill
+├── workspace/            # Workspace awareness
+│   ├── manager.py        # WorkspaceManager (git detection, file counts)
+│   ├── git.py            # Git status watcher
+│   └── context_profile.py # Runtime posture detection (coding/general)
+├── orchestrator.py       # Sub-agent lifecycle manager
 └── cli/
-    ├── main.py           # typer entry
-    └── commands.py       # slash commands
+    ├── main.py           # typer entry: chat, run
+    ├── commands.py       # slash command implementations
+    └── repl.py           # REPL display + command dispatch
 ```
 
 ## Security

@@ -1,10 +1,10 @@
 """Tests for the centralized API error classifier."""
 
-from agentsx.core.error_classifier import (
+from agentsx.protocol.errors import (
     FailoverReason,
+    ProviderError,
     classify_api_error,
 )
-from agentsx.core.errors import ProviderError
 
 
 def test_classify_rate_limit_429() -> None:

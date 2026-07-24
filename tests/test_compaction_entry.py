@@ -4,7 +4,7 @@ from agentsx.context.compaction_entry import (
     CompactionEntry,
     replay_messages,
 )
-from agentsx.core.types import AgentMessage, MessageRole
+from agentsx.protocol.messages import AgentMessage, MessageRole
 
 
 def test_compaction_entry_serialization() -> None:

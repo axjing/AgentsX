@@ -12,13 +12,16 @@ from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
 from typing import Any
 
-from agentsx.core.types import (
-    AgentMessage,
-    MessageRole,
+from agentsx.protocol.events import (
     StreamEvent,
     TextStreamEvent,
     ToolCall,
     ToolCallStreamEvent,
+)
+from agentsx.protocol.messages import AgentMessage, MessageRole
+from agentsx.provider.converters import (
+    message_to_anthropic,
+    message_to_openai,
 )
 
 
@@ -238,7 +241,7 @@ class OpenAITransport(ProviderTransport):
         """
         result: list[dict[str, Any]] = []
         for msg in messages:
-            converted = msg._to_openai()
+            converted = message_to_openai(msg)
             result.append(converted)
         return result
 
@@ -314,7 +317,7 @@ class AnthropicTransport(ProviderTransport):
         for msg in messages:
             if msg.role == MessageRole.SYSTEM:
                 continue
-            converted = msg._to_anthropic()
+            converted = message_to_anthropic(msg)
             result.append(converted)
         return result
 

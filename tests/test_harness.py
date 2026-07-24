@@ -6,10 +6,10 @@ from typing import Any
 import pytest
 
 from agentsx.agent.harness import AgentHarness
-from agentsx.core.types import (
+from agentsx.protocol.events import TextStreamEvent
+from agentsx.protocol.messages import (
     AgentMessage,
     MessageRole,
-    TextStreamEvent,
 )
 from agentsx.provider import Model, Provider
 

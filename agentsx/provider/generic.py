@@ -20,8 +20,8 @@ from typing import Any
 import httpx
 
 from agentsx.config import get_settings
-from agentsx.core.errors import ProviderError
-from agentsx.core.types import AgentMessage, StreamEvent
+from agentsx.protocol.errors import ProviderError
+from agentsx.protocol.events import AgentMessage, StreamEvent
 from agentsx.provider import Model, Provider, get_profile, register_provider
 from agentsx.provider.transport import OpenAITransport
 
@@ -67,7 +67,7 @@ class GenericProvider(Provider):
         provider_name = self.model.provider_name
         profile = get_profile(provider_name)
         if profile and profile.env_api_key:
-            env_key = profile.env_api_key.lower()
+            env_key = profile.env_api_key.removeprefix("AGENTSX_").lower()
             key_val = getattr(settings, env_key, "")
             if key_val:
                 return key_val
@@ -80,7 +80,7 @@ class GenericProvider(Provider):
         provider_name = self.model.provider_name
         profile = get_profile(provider_name)
         if profile and profile.env_api_base:
-            env_base = profile.env_api_base.lower()
+            env_base = profile.env_api_base.removeprefix("AGENTSX_").lower()
             base_val = getattr(settings, env_base, "")
             if base_val:
                 return base_val
@@ -122,8 +122,6 @@ class GenericProvider(Provider):
         if self.model.provider_name == "deepseek":
             kwargs["max_tokens"] = self.model.max_tokens or 8192
 
-        kwargs["headers"] = headers
-
         url = f"{api_base.rstrip('/')}/chat/completions"
         async with httpx.AsyncClient(timeout=60.0) as client:
             try:
@@ -131,6 +129,7 @@ class GenericProvider(Provider):
                     "POST",
                     url,
                     json=kwargs,
+                    headers=headers,
                 ) as response:
                     if response.status_code != 200:
                         body = await response.aread()
@@ -171,4 +170,5 @@ register_provider("openrouter", GenericProvider)
 register_provider("ollama", GenericProvider)
 register_provider("vllm", GenericProvider)
 register_provider("sglang", GenericProvider)
+register_provider("qwen", GenericProvider)
 register_provider("custom", GenericProvider)

@@ -210,6 +210,19 @@ SGLANG_PROFILE = ProviderProfile(
     model_prefix="",
 )
 
+QWEN_PROFILE = ProviderProfile(
+    name="qwen",
+    display_name="Alibaba Qwen",
+    base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+    api_format="openai",
+    env_api_key="AGENTSX_QWEN_API_KEY",
+    env_api_base="AGENTSX_QWEN_API_BASE",
+    default_model="qwen-plus",
+    context_window=131_072,
+    supports_vision=True,
+    model_prefix="qwen",
+)
+
 # Registered profiles lookup
 _BUILTIN_PROFILES: dict[str, ProviderProfile] = {
     "openai": OPENAI_PROFILE,
@@ -221,6 +234,7 @@ _BUILTIN_PROFILES: dict[str, ProviderProfile] = {
     "ollama": OLLAMA_PROFILE,
     "vllm": VLLM_PROFILE,
     "sglang": SGLANG_PROFILE,
+    "qwen": QWEN_PROFILE,
 }
 
 

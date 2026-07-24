@@ -31,31 +31,6 @@ from typing import TypeAlias
 
 from agentsx.config import get_settings
 from agentsx.context.compaction import compact_messages, should_compact
-from agentsx.core.tool_result import ToolResultStatus
-from agentsx.core.types import (
-    AgentEndEvent,
-    AgentEvent,
-    AgentMessage,
-    AgentStartEvent,
-    CompactionEvent,
-    Decision,
-    ErrorEvent,
-    MessageRole,
-    ModelRequestEvent,
-    ModelResponseEvent,
-    PromptEvent,
-    RetryEvent,
-    StreamEvent,
-    TextDeltaEvent,
-    TextStreamEvent,
-    ToolCall,
-    ToolCallStreamEvent,
-    ToolExecutionEvent,
-    ToolExecutionStartEvent,
-    ToolResult,
-    TurnEndEvent,
-    TurnStartEvent,
-)
 from agentsx.extensions.api import (
     EVENT_ON_ERROR,
     EVENT_ON_LOOP_END,
@@ -66,6 +41,33 @@ from agentsx.extensions.api import (
     EVENT_ON_TOOL_RESULT,
     ExtensionAPI,
     ExtensionEvent,
+)
+from agentsx.protocol.events import (
+    AgentEndEvent,
+    AgentEvent,
+    AgentStartEvent,
+    CompactionEvent,
+    ErrorEvent,
+    ModelRequestEvent,
+    ModelResponseEvent,
+    PromptEvent,
+    RetryEvent,
+    StreamEvent,
+    TextDeltaEvent,
+    TextStreamEvent,
+    ToolCallStreamEvent,
+    ToolExecutionEvent,
+    ToolExecutionStartEvent,
+    TurnEndEvent,
+    TurnStartEvent,
+)
+from agentsx.protocol.messages import (
+    AgentMessage,
+    Decision,
+    MessageRole,
+    ToolCall,
+    ToolResult,
+    ToolResultStatus,
 )
 from agentsx.provider import Provider
 from agentsx.security.policy import ExecutionPolicy
@@ -85,6 +87,141 @@ _MAX_STEER_PER_STEP = 8
 # (e.g., the tail of a log file or the last lines of a diff).
 _TRUNCATE_HEAD = 3000
 _TRUNCATE_TAIL = 1000
+
+
+async def _compact_context(
+    messages: list[AgentMessage],
+    *,
+    compact: bool,
+    compact_max_tokens: int,
+    compact_max_messages: int,
+) -> AsyncIterator[CompactionEvent]:
+    """Perform context compaction if thresholds are exceeded.
+
+    Yields a ``CompactionEvent`` when compaction actually occurs.
+    The caller is responsible for clearing and extending *messages*
+    with the returned compacted list.
+    """
+    if not compact or not should_compact(
+        messages,
+        max_tokens=compact_max_tokens,
+        max_messages=compact_max_messages,
+    ):
+        return
+
+    old_count = len(messages)
+    compacted = compact_messages(messages)
+    if len(compacted) < old_count:
+        messages.clear()
+        messages.extend(compacted)
+        yield CompactionEvent(
+            compacted_count=old_count - len(compacted),
+            preserved_count=len(compacted),
+        )
+        logger.debug(
+            "Context compacted: %d → %d messages",
+            old_count,
+            len(compacted),
+        )
+
+
+@dataclasses.dataclass
+class _StreamResult:
+    """Mutable container populated by _process_provider_stream."""
+
+    content: str = ""
+    tool_calls: list[ToolCallStreamEvent] = dataclasses.field(default_factory=list)
+
+
+async def _process_provider_stream(
+    provider: Provider,
+    messages: list[AgentMessage],
+    step: int,
+    settings,
+    extensions: ExtensionAPI | None,
+    result: _StreamResult,
+) -> AsyncIterator[AgentEvent]:
+    """Stream a provider response, yielding events and populating *result*.
+
+    Raises ``_ProviderStreamError`` on failure so the caller can
+    attempt auto-retry on context overflow.
+    """
+    content_parts: list[str] = []
+    tool_calls: list[ToolCallStreamEvent] = []
+
+    provider_stream = provider.stream_with_retry(messages)
+    step_timeout = settings.tool_timeout
+    if step_timeout > 0:
+        provider_stream = _wrap_step_timeout(provider_stream, step_timeout)
+
+    try:
+        async for event in provider_stream:
+            if isinstance(event, TextStreamEvent):
+                content_parts.append(event.text)
+                yield TextDeltaEvent(text=event.text)
+                if extensions is not None:
+                    await extensions.emit(
+                        ExtensionEvent(
+                            type=EVENT_ON_MODEL_RESPONSE,
+                            data={"content": event.text, "delta": True},
+                        )
+                    )
+                yield ModelResponseEvent(content=event.text, delta=True)
+            elif isinstance(event, ToolCallStreamEvent):
+                tool_calls.append(event)
+            elif isinstance(event, RetryEvent):
+                yield event
+    except TimeoutError as te:
+        yield ErrorEvent(
+            error=te,
+            context=f"step {step} exceeded {step_timeout}s timeout",
+        )
+        result.content = _SENTINEL_ERROR
+        return
+    except Exception as exc:  # noqa: BLE001
+        from agentsx.protocol.errors import (  # noqa: PLC0415
+            ProviderError,
+            classify_api_error,
+        )
+
+        error = exc
+        if not isinstance(error, ProviderError):
+            error = ProviderError(str(exc))
+            error.__cause__ = exc
+        classified = classify_api_error(error)
+        if extensions is not None:
+            await extensions.emit(
+                ExtensionEvent(
+                    type=EVENT_ON_ERROR,
+                    data={
+                        "error": str(exc),
+                        "reason": str(classified.reason),
+                        "recovery_hint": classified.recovery.user_hint,
+                    },
+                )
+            )
+        raise _ProviderStreamError(classified, error, exc) from exc
+
+    result.content = "".join(content_parts)
+    result.tool_calls = tool_calls
+
+
+_SENTINEL_ERROR = "__STREAM_ERROR_SENTINEL__"
+
+
+class _ProviderStreamError(Exception):
+    """Carries classified error info from _process_provider_stream to caller."""
+
+    def __init__(
+        self,
+        classified,
+        error: Exception,
+        original: Exception,
+    ) -> None:
+        super().__init__(str(original))
+        self.classified = classified
+        self.error = error
+        self.original = original
 
 
 async def run_agent_loop(
@@ -150,26 +287,13 @@ async def run_agent_loop(
             return
 
         # ── Context compaction (before each step) ─────────────────────
-        if compact and should_compact(
+        async for compaction_event in _compact_context(
             messages,
-            max_tokens=compact_max_tokens,
-            max_messages=compact_max_messages,
+            compact=compact,
+            compact_max_tokens=compact_max_tokens,
+            compact_max_messages=compact_max_messages,
         ):
-            old_count = len(messages)
-            compacted = compact_messages(messages)
-            if len(compacted) < old_count:
-                compacted_count = old_count - len(compacted)
-                messages.clear()
-                messages.extend(compacted)
-                yield CompactionEvent(
-                    compacted_count=compacted_count,
-                    preserved_count=len(compacted),
-                )
-                logger.debug(
-                    "Context compacted: %d → %d messages",
-                    old_count,
-                    len(compacted),
-                )
+            yield compaction_event
 
         step += 1
         logger.debug("Agent loop step %d", step)
@@ -198,87 +322,51 @@ async def run_agent_loop(
         )
 
         # ── Stream from provider (with step-level timeout) ────────────
-        content_parts: list[str] = []
-        pending_calls: list[ToolCallStreamEvent] = []
         step_start = time.monotonic()
+        stream_result = _StreamResult()
 
-        step_timeout = settings.tool_timeout
         try:
-            provider_stream = provider.stream_with_retry(messages)
-            if step_timeout > 0:
-                provider_stream = _wrap_step_timeout(provider_stream, step_timeout)
-            async for event in provider_stream:
-                if isinstance(event, TextStreamEvent):
-                    content_parts.append(event.text)
-                    yield TextDeltaEvent(text=event.text)
-                    if extensions is not None:
-                        await extensions.emit(
-                            ExtensionEvent(
-                                type=EVENT_ON_MODEL_RESPONSE,
-                                data={"content": event.text, "delta": True},
-                            )
-                        )
-                    yield ModelResponseEvent(content=event.text, delta=True)
-                elif isinstance(event, ToolCallStreamEvent):
-                    pending_calls.append(event)
-                elif isinstance(event, RetryEvent):
-                    yield event
-        except TimeoutError as te:
-            yield ErrorEvent(
-                error=te,
-                context=f"step {step} exceeded {step_timeout}s timeout",
-            )
-            return
-        except Exception as exc:  # noqa: BLE001
-            from agentsx.core.error_classifier import (  # noqa: PLC0415
-                classify_api_error,
-            )
-            from agentsx.core.errors import ProviderError  # noqa: PLC0415
-
-            classified = classify_api_error(
-                exc if isinstance(exc, ProviderError) else ProviderError(str(exc))
-            )
-            if extensions is not None:
-                await extensions.emit(
-                    ExtensionEvent(
-                        type=EVENT_ON_ERROR,
-                        data={
-                            "error": str(exc),
-                            "reason": str(classified.reason),
-                            "recovery_hint": classified.recovery.user_hint,
-                        },
-                    )
-                )
-
+            async for event in _process_provider_stream(
+                provider=provider,
+                messages=messages,
+                step=step,
+                settings=settings,
+                extensions=extensions,
+                result=stream_result,
+            ):
+                yield event
+        except _ProviderStreamError as pse:
             # Auto-retry on context overflow: compact and retry once
-            if classified.recovery.should_compress and compact:
+            if pse.classified.recovery.should_compress and compact:
                 logger.info("Auto-compacting on context overflow")
-                old_count = len(messages)
-                compacted = compact_messages(messages)
-                if len(compacted) < old_count:
-                    messages.clear()
-                    messages.extend(compacted)
-                    yield CompactionEvent(
-                        compacted_count=old_count - len(compacted),
-                        preserved_count=len(compacted),
-                    )
-                    # Retry the step once after compaction
-                    continue
+                async for compaction_event in _compact_context(
+                    messages,
+                    compact=compact,
+                    compact_max_tokens=compact_max_tokens,
+                    compact_max_messages=compact_max_messages,
+                ):
+                    yield compaction_event
+                # Retry the step once after compaction
+                continue
 
             yield ErrorEvent(
-                error=exc,
+                error=pse.error,
                 context=(
-                    f"classified as {classified.reason}: "
-                    f"{classified.recovery.user_hint}"
+                    f"classified as {pse.classified.reason}: "
+                    f"{pse.classified.recovery.user_hint}"
                 ),
             )
+            return
+
+        if stream_result.content is _SENTINEL_ERROR:
+            # Timeout already yielded ErrorEvent by _process_provider_stream
             return
 
         step_elapsed = time.monotonic() - step_start
         logger.debug("Step %d: provider responded in %.2fs", step, step_elapsed)
 
         # ── Assemble the full response ────────────────────────────────
-        full_content = "".join(content_parts)
+        full_content = stream_result.content
 
         yield ModelResponseEvent(
             content=full_content,
@@ -292,27 +380,29 @@ async def run_agent_loop(
                 role=MessageRole.ASSISTANT,
                 content=full_content,
                 tool_calls=(
-                    [tc.tool_call for tc in pending_calls] if pending_calls else None
+                    [tc.tool_call for tc in stream_result.tool_calls]
+                    if stream_result.tool_calls
+                    else None
                 ),
             ),
         )
 
         # ── Tool call execution ───────────────────────────────────────
-        if not pending_calls:
+        if not stream_result.tool_calls:
             yield TurnEndEvent(turn=step, had_tool_calls=False)
             break  # no tools → loop is done
 
         if tools is None:
             yield ErrorEvent(
                 error=RuntimeError(
-                    f"Provider requested {len(pending_calls)} tool call(s) "
+                    f"Provider requested {len(stream_result.tool_calls)} tool call(s) "
                     "but no ToolRegistry was provided",
                 ),
                 context="missing ToolRegistry",
             )
             return
 
-        for tc_event in pending_calls:
+        for tc_event in stream_result.tool_calls:
             tc = tc_event.tool_call
 
             # ── Tool execution start ──────────────────────────────────
@@ -410,7 +500,7 @@ async def run_agent_loop(
                     data={
                         "step": step,
                         "reason": "tool_calls_executed"
-                        if pending_calls
+                        if stream_result.tool_calls
                         else "completed",
                     },
                 )

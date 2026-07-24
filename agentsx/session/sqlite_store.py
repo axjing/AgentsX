@@ -28,8 +28,9 @@ from pathlib import Path
 from uuid import uuid4
 
 from agentsx.config import get_settings
-from agentsx.core.errors import SessionError
-from agentsx.core.types import AgentMessage, MessageRole, ToolCall
+from agentsx.protocol.errors import SessionError
+from agentsx.protocol.messages import AgentMessage, MessageRole, ToolCall
+from agentsx.session.protocol import SessionBackend
 
 
 @dataclass
@@ -51,7 +52,7 @@ class SQLiteSession:
     """Reason for branching: 'user', 'compression', 'delegate', etc."""
 
 
-class SQLiteSessionStore:
+class SQLiteSessionStore(SessionBackend):
     """SQLite-backed session storage with FTS5 search.
 
     Usage::

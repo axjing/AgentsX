@@ -3,12 +3,14 @@
 import json
 from collections.abc import AsyncIterator
 
-from agentsx.core.types import (
+from agentsx.protocol.events import (
+    TextStreamEvent,
+    ToolCallStreamEvent,
+)
+from agentsx.protocol.messages import (
     AgentMessage,
     MessageRole,
-    TextStreamEvent,
     ToolCall,
-    ToolCallStreamEvent,
 )
 from agentsx.provider.transport import AnthropicTransport, OpenAITransport
 

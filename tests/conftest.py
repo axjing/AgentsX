@@ -5,7 +5,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from agentsx.core.types import AgentMessage, TextStreamEvent
+from agentsx.protocol.messages import AgentMessage
+from agentsx.protocol.events import TextStreamEvent
 from agentsx.provider import Model, Provider
 
 

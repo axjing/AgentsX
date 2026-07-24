@@ -1,6 +1,6 @@
 """Tests for the structured ToolResult dataclass."""
 
-from agentsx.core.tool_result import ToolResult, ToolResultStatus
+from agentsx.protocol.messages import ToolResult, ToolResultStatus
 
 
 def test_tool_result_status_enum_values() -> None:

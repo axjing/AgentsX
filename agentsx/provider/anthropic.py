@@ -6,8 +6,8 @@ from typing import Any
 import httpx
 
 from agentsx.config import get_settings
-from agentsx.core.errors import ProviderError
-from agentsx.core.types import AgentMessage, MessageRole, StreamEvent
+from agentsx.protocol.errors import ProviderError
+from agentsx.protocol.events import AgentMessage, MessageRole, StreamEvent
 from agentsx.provider import Model, Provider, register_provider
 from agentsx.provider.transport import AnthropicTransport
 

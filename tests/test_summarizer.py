@@ -1,7 +1,7 @@
 """Tests for context summarization."""
 
 from agentsx.context.summarizer import ContextSummarizer
-from agentsx.core.types import AgentMessage, MessageRole
+from agentsx.protocol.messages import AgentMessage, MessageRole
 
 
 class TestContextSummarizer:

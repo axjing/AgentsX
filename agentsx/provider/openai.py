@@ -6,8 +6,8 @@ from typing import Any
 import httpx
 
 from agentsx.config import get_settings
-from agentsx.core.errors import ProviderError
-from agentsx.core.types import AgentMessage, StreamEvent
+from agentsx.protocol.errors import ProviderError
+from agentsx.protocol.events import AgentMessage, StreamEvent
 from agentsx.provider import Model, Provider, register_provider
 from agentsx.provider.transport import OpenAITransport
 
@@ -63,8 +63,6 @@ class OpenAIProvider(Provider):
             max_tokens=self.model.max_tokens,
             model=self.model.id,
         )
-        kwargs["headers"] = headers
-
         url = f"{api_base.rstrip('/')}/chat/completions"
         async with httpx.AsyncClient(timeout=60.0) as client:
             try:
@@ -72,6 +70,7 @@ class OpenAIProvider(Provider):
                     "POST",
                     url,
                     json=kwargs,
+                    headers=headers,
                 ) as response:
                     if response.status_code != 200:
                         body = await response.aread()

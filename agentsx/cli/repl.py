@@ -10,7 +10,8 @@ from rich.console import Console
 from rich.panel import Panel
 
 from agentsx.cli import commands
-from agentsx.core.types import AgentMessage, ToolExecutionEvent
+from agentsx.protocol.events import ToolExecutionEvent
+from agentsx.protocol.messages import AgentMessage
 from agentsx.session.store import SessionStore
 
 console = Console()

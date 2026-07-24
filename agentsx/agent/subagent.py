@@ -10,11 +10,13 @@ from dataclasses import dataclass
 from uuid import uuid4
 
 from agentsx.agent.loop import run_agent_loop
-from agentsx.core.types import (
+from agentsx.protocol.events import (
     AgentEvent,
+    ModelResponseEvent,
+)
+from agentsx.protocol.messages import (
     AgentMessage,
     MessageRole,
-    ModelResponseEvent,
 )
 from agentsx.provider import Provider, create_provider
 from agentsx.security.policy import ExecutionPolicy

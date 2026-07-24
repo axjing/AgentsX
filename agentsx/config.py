@@ -4,8 +4,13 @@ All settings are read from ``AGENTSX_*`` environment variables.
 Uses Pydantic Settings for validation and type coercion.
 """
 
+from pathlib import Path
+
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+_ENV_FILE = _PROJECT_ROOT / ".env"
 
 
 class AgentsXSettings(BaseSettings):
@@ -21,7 +26,7 @@ class AgentsXSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="AGENTSX_",
-        env_file=".env",
+        env_file=str(_ENV_FILE),
         extra="ignore",
     )
 
@@ -97,6 +102,13 @@ class AgentsXSettings(BaseSettings):
 
     sglang_api_base: str = ""
     """SGLang API base URL. Reads from ``AGENTSX_SGLANG_API_BASE``."""
+
+    # ── Provider: Qwen ──
+    qwen_api_key: str = ""
+    """Qwen (DashScope) API key. Reads from ``AGENTSX_QWEN_API_KEY``."""
+
+    qwen_api_base: str = ""
+    """Qwen (DashScope) API base URL. Reads from ``AGENTSX_QWEN_API_BASE``."""
 
     # ── Tools ──
     tool_timeout: int = Field(default=30, ge=1, le=600)

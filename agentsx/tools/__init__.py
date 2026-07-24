@@ -22,8 +22,8 @@ import inspect
 from collections.abc import Callable
 from typing import Any, TypeVar
 
-from agentsx.core.errors import ToolError
-from agentsx.core.tool_result import ToolResult, ToolResultStatus
+from agentsx.protocol.errors import ToolError
+from agentsx.protocol.messages import ToolResult, ToolResultStatus
 
 _F = TypeVar("_F", bound=Callable[..., Any])
 

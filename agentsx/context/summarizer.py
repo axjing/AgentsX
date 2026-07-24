@@ -13,7 +13,7 @@ Inspired by Pi branch-summarization and hermes context_compressor.
 
 from dataclasses import dataclass
 
-from agentsx.core.types import AgentMessage, MessageRole
+from agentsx.protocol.messages import AgentMessage, MessageRole
 
 
 @dataclass

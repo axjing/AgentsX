@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from agentsx.core.types import (
+from agentsx.protocol.events import (
     AgentEndEvent,
     AgentEvent,
     AgentStartEvent,

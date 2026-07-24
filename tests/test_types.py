@@ -2,16 +2,18 @@
 
 from datetime import datetime
 
-from agentsx.core.types import (
+from agentsx.protocol.events import (
     AgentEvent,
-    AgentMessage,
-    Decision,
     ErrorEvent,
-    MessageRole,
     ModelRequestEvent,
     ModelResponseEvent,
-    ToolCall,
     ToolExecutionEvent,
+)
+from agentsx.protocol.messages import (
+    AgentMessage,
+    Decision,
+    MessageRole,
+    ToolCall,
     ToolResult,
     ToolResultStatus,
 )

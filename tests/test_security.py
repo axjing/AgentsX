@@ -5,14 +5,16 @@ from collections.abc import AsyncIterator
 import pytest
 
 from agentsx.agent.loop import run_agent_loop
-from agentsx.core.types import (
+from agentsx.protocol.events import (
+    StreamEvent,
+    ToolCallStreamEvent,
+    ToolExecutionEvent,
+)
+from agentsx.protocol.messages import (
     AgentMessage,
     Decision,
     MessageRole,
-    StreamEvent,
     ToolCall,
-    ToolCallStreamEvent,
-    ToolExecutionEvent,
 )
 from agentsx.provider import Model, Provider
 from agentsx.security.policy import ExecutionPolicy, Rule

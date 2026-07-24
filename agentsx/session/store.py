@@ -16,6 +16,8 @@ Design:
     - No database, no migrations
 """
 
+from __future__ import annotations
+
 import json
 import shutil
 import threading
@@ -35,8 +37,9 @@ from agentsx.context.compaction_entry import (
 from agentsx.context.compaction_entry import (
     append_compaction_entry as _append_compaction_entry,
 )
-from agentsx.core.errors import SessionError
-from agentsx.core.types import AgentMessage, MessageRole, ToolCall
+from agentsx.protocol.errors import SessionError
+from agentsx.protocol.messages import AgentMessage, MessageRole, ToolCall
+from agentsx.session.protocol import SessionBackend
 
 # Alias for list type annotation — the .list() method shadows the builtin.
 _List = list
@@ -53,7 +56,7 @@ class Session:
     title: str
 
 
-class SessionStore:
+class SessionStore(SessionBackend):
     """JSONL file-tree session storage with memory cache.
 
     Usage::
@@ -351,6 +354,14 @@ class SessionStore:
         """Remove oldest cached sessions if cache is full (true LRU)."""
         if len(self._message_cache) > self._cache_size:
             self._message_cache.popitem(last=False)
+
+    def list_sessions(self) -> list[Session]:
+        """Alias for ``list()`` — return all sessions, newest first."""
+        return self.list()
+
+    def close(self) -> None:
+        """No-op for the JSONL backend (no persistent connections)."""
+        pass
 
 
 # ── Serialisation helpers ──────────────────────────────────────────────

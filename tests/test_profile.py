@@ -6,7 +6,7 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from agentsx.core.profile import (
+from agentsx.workspace.context_profile import (
     AgentPosture,
     ContextProfile,
     get_profile,

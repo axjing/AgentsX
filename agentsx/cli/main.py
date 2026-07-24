@@ -20,15 +20,18 @@ from rich.table import Table
 from agentsx.agent.loop import run_agent_loop
 from agentsx.cli import repl
 from agentsx.config import get_settings
-from agentsx.core.errors import SessionError
-from agentsx.core.types import (
-    AgentMessage,
-    Decision,
+from agentsx.protocol.errors import SessionError
+from agentsx.protocol.events import (
     ErrorEvent,
-    MessageRole,
     ModelRequestEvent,
     ModelResponseEvent,
     ToolExecutionEvent,
+)
+from agentsx.protocol.messages import (
+    AgentMessage,
+    ContentPart,
+    Decision,
+    MessageRole,
 )
 from agentsx.provider import create_provider
 from agentsx.security.policy import ExecutionPolicy
@@ -239,7 +242,6 @@ def _build_user_message(
     Returns:
         An AgentMessage with multimodal content if media is provided.
     """
-    from agentsx.core.types import ContentPart  # noqa: PLC0415
 
     has_media = image_paths or audio_paths or video_paths
     if not has_media:

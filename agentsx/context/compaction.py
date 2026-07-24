@@ -15,7 +15,7 @@ Design:
 
 import unicodedata
 
-from agentsx.core.types import AgentMessage, MessageRole
+from agentsx.protocol.messages import AgentMessage, MessageRole
 
 # Base estimate: ~4 characters per token for Latin/whitespace text.
 _LATIN_CHARS_PER_TOKEN = 4

@@ -14,10 +14,13 @@ from collections import deque
 from collections.abc import AsyncIterator, Callable
 
 from agentsx.agent.loop import run_agent_loop
-from agentsx.core.types import AgentEvent, AgentMessage, MessageRole
 from agentsx.extensions.api import ExtensionAPI
+from agentsx.protocol.errors import SessionError
+from agentsx.protocol.events import AgentEvent
+from agentsx.protocol.messages import AgentMessage, MessageRole
 from agentsx.provider import Provider
 from agentsx.security.policy import ExecutionPolicy
+from agentsx.session.protocol import SessionBackend
 from agentsx.tools import ToolRegistry
 
 EventListener = Callable[[AgentEvent], None]
@@ -53,7 +56,7 @@ class AgentHarness:
         policy: ExecutionPolicy | None = None,
         extensions: ExtensionAPI | None = None,
         max_steps: int | None = None,
-        session_store: object | None = None,
+        session_store: SessionBackend | None = None,
         session_id: str = "",
     ) -> None:
         """Initialise the harness.
@@ -196,7 +199,6 @@ class AgentHarness:
             compact_messages,
             should_compact,
         )
-        from agentsx.core.errors import SessionError  # noqa: PLC0415
 
         if not force and not should_compact(self._messages):
             return (
@@ -219,7 +221,7 @@ class AgentHarness:
                 compacted[1].content if len(compacted) > 1 else "Context compacted"
             )
             try:
-                self._session_store.append_compaction_entry(  # type: ignore[attr-defined]
+                self._session_store.append_compaction_entry(
                     self._session_id,
                     replaces_ids=replaced_ids,
                     summary=summary,
