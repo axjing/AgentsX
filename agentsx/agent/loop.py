@@ -30,7 +30,7 @@ from collections.abc import AsyncIterator
 from typing import TypeAlias
 
 from agentsx.config import get_settings
-from agentsx.context.compaction import compact_messages, should_compact
+from agentsx.context.compaction import compact_messages_with_pruning, should_compact
 from agentsx.extensions.api import (
     EVENT_ON_ERROR,
     EVENT_ON_LOOP_END,
@@ -39,8 +39,11 @@ from agentsx.extensions.api import (
     EVENT_ON_MODEL_RESPONSE,
     EVENT_ON_TOOL_CALL,
     EVENT_ON_TOOL_RESULT,
+    EVENT_POST_TOOL_CALL,
+    EVENT_PRE_TOOL_CALL,
     ExtensionAPI,
     ExtensionEvent,
+    InterceptorEvent,
 )
 from agentsx.protocol.events import (
     AgentEndEvent,
@@ -110,7 +113,7 @@ async def _compact_context(
         return
 
     old_count = len(messages)
-    compacted = compact_messages(messages)
+    compacted = compact_messages_with_pruning(messages)
     if len(compacted) < old_count:
         messages.clear()
         messages.extend(compacted)
@@ -417,6 +420,33 @@ async def run_agent_loop(
                     )
                 )
 
+            # ── Interceptor: pre tool call ───────────────────────────
+            if extensions is not None:
+                pre_event = await extensions.emit_interceptor(
+                    InterceptorEvent(
+                        type=EVENT_PRE_TOOL_CALL,
+                        data={"name": tc.name, "arguments": tc.arguments},
+                    )
+                )
+                if pre_event.is_suppressed:
+                    tool_result = ToolResult(
+                        tool_call_id=tc.id,
+                        status=ToolResultStatus.BLOCKED,
+                        content=f"Suppressed by extension interceptor: '{tc.name}'",
+                    )
+                    yield ToolExecutionEvent(
+                        tool_call=tc,
+                        result=tool_result,
+                    )
+                    messages.append(
+                        AgentMessage(
+                            role=MessageRole.TOOL,
+                            content=tool_result.to_legacy_string(),
+                            tool_call_id=tc.id,
+                        ),
+                    )
+                    continue
+
             # ── Policy gate ───────────────────────────────────────────
             tool_start = time.monotonic()
             if policy is not None:
@@ -462,6 +492,21 @@ async def run_agent_loop(
             )
 
             result_text = tool_result.to_legacy_string()
+
+            # ── Interceptor: post tool call ──────────────────────────
+            if extensions is not None:
+                post_event = await extensions.emit_interceptor(
+                    InterceptorEvent(
+                        type=EVENT_POST_TOOL_CALL,
+                        data={
+                            "name": tc.name,
+                            "success": tool_result.is_success,
+                            "content": result_text,
+                        },
+                    )
+                )
+                if "content" in post_event.data:
+                    result_text = str(post_event.data["content"])
 
             # ── Extension: tool result ────────────────────────────────
             if extensions is not None:

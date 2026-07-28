@@ -7,6 +7,7 @@ import pytest
 
 from agentsx.extensions.api import (
     ALL_EVENTS,
+    ALL_INTERCEPTOR_EVENTS,
     EVENT_ON_ERROR,
     EVENT_ON_LOOP_END,
     EVENT_ON_LOOP_START,
@@ -14,8 +15,14 @@ from agentsx.extensions.api import (
     EVENT_ON_MODEL_RESPONSE,
     EVENT_ON_TOOL_CALL,
     EVENT_ON_TOOL_RESULT,
+    EVENT_POST_TOOL_CALL,
+    EVENT_PRE_TOOL_CALL,
+    EVENT_PRE_COMPACT,
+    EVENT_SESSION_END,
+    EVENT_SESSION_START,
     ExtensionAPI,
     ExtensionEvent,
+    InterceptorEvent,
 )
 from agentsx.protocol.events import (
     StreamEvent,
@@ -35,7 +42,7 @@ class TestEventConstants:
     """Predefined event types exist and are unique."""
 
     def test_all_events_defined(self) -> None:
-        assert len(ALL_EVENTS) == 7
+        assert len(ALL_EVENTS) == 12
         assert EVENT_ON_LOOP_START in ALL_EVENTS
         assert EVENT_ON_LOOP_END in ALL_EVENTS
         assert EVENT_ON_MODEL_REQUEST in ALL_EVENTS
@@ -43,6 +50,15 @@ class TestEventConstants:
         assert EVENT_ON_TOOL_CALL in ALL_EVENTS
         assert EVENT_ON_TOOL_RESULT in ALL_EVENTS
         assert EVENT_ON_ERROR in ALL_EVENTS
+        assert EVENT_PRE_TOOL_CALL in ALL_EVENTS
+        assert EVENT_POST_TOOL_CALL in ALL_EVENTS
+        assert EVENT_PRE_COMPACT in ALL_EVENTS
+        assert EVENT_SESSION_START in ALL_EVENTS
+        assert EVENT_SESSION_END in ALL_EVENTS
+
+    def test_interceptor_events_subset(self) -> None:
+        assert ALL_INTERCEPTOR_EVENTS.issubset(ALL_EVENTS)
+        assert len(ALL_INTERCEPTOR_EVENTS) == 5
 
 
 class TestExtensionEvent:
@@ -56,6 +72,28 @@ class TestExtensionEvent:
     def test_default_data(self) -> None:
         event = ExtensionEvent(type="on_test")
         assert event.data == {}
+
+
+class TestInterceptorEvent:
+    """InterceptorEvent — suppress, modify, properties."""
+
+    def test_suppress(self) -> None:
+        event = InterceptorEvent(type="pre_tool_call", data={"name": "bash"})
+        assert not event.is_suppressed
+        event.suppress()
+        assert event.is_suppressed
+
+    def test_modify(self) -> None:
+        event = InterceptorEvent(type="pre_tool_call", data={"name": "bash"})
+        assert not event.is_modified
+        event.modify({"name": "custom_tool"})
+        assert event.is_modified
+        assert event.data["name"] == "custom_tool"
+
+    def test_inherits_extension_event(self) -> None:
+        event = InterceptorEvent(type="test", data={"x": 1})
+        assert isinstance(event, ExtensionEvent)
+        assert event.type == "test"
 
 
 class TestExtensionAPI:
@@ -113,6 +151,55 @@ class TestExtensionAPI:
         api.on(EVENT_ON_LOOP_START, good)
         # Should not raise
         await api.emit(ExtensionEvent(type=EVENT_ON_LOOP_START))
+
+    async def test_emit_interceptor_returns_event(self, api: ExtensionAPI) -> None:
+        """emit_interceptor returns the event for inspection."""
+
+        async def handler(event: ExtensionEvent) -> None:
+            event.suppress()  # type: ignore[union-attr]
+
+        api.on(EVENT_PRE_TOOL_CALL, handler)
+        event = InterceptorEvent(
+            type=EVENT_PRE_TOOL_CALL,
+            data={"name": "bash"},
+        )
+        result = await api.emit_interceptor(event)
+        assert result.is_suppressed
+        assert result.data["name"] == "bash"
+
+    async def test_emit_interceptor_modify(self, api: ExtensionAPI) -> None:
+        """emit_interceptor allows handlers to modify event data."""
+
+        async def handler(event: ExtensionEvent) -> None:
+            event.modify({"name": "blocked"})  # type: ignore[union-attr]
+
+        api.on(EVENT_PRE_TOOL_CALL, handler)
+        event = InterceptorEvent(
+            type=EVENT_PRE_TOOL_CALL,
+            data={"name": "bash"},
+        )
+        result = await api.emit_interceptor(event)
+        assert result.is_modified
+        assert result.data["name"] == "blocked"
+
+    async def test_emit_interceptor_handler_error_isolation(
+        self, api: ExtensionAPI,
+    ) -> None:
+        """A failing interceptor handler does not crash subsequent handlers."""
+        calls: list[str] = []
+
+        async def failing(event: ExtensionEvent) -> None:
+            raise RuntimeError("boom")
+
+        async def good(event: ExtensionEvent) -> None:
+            calls.append("good")
+
+        api.on(EVENT_PRE_TOOL_CALL, failing)
+        api.on(EVENT_PRE_TOOL_CALL, good)
+        event = InterceptorEvent(type=EVENT_PRE_TOOL_CALL)
+        result = await api.emit_interceptor(event)
+        assert calls == ["good"]
+        assert not result.is_suppressed
 
     # ── load_entry_points ──────────────────────────────────
 

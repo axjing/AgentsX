@@ -13,8 +13,12 @@ import json
 from dataclasses import dataclass
 from fnmatch import fnmatch
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from agentsx.protocol.messages import Decision
+
+if TYPE_CHECKING:
+    from agentsx.security.saved_rules import SavedRulesStore
 
 
 @dataclass
@@ -48,10 +52,12 @@ class ExecutionPolicy:
         rules: list[Rule] | None = None,
         default_decision: Decision = Decision.PROMPT,
         allowed_dirs: list[Path] | None = None,
+        saved_rules_store: "SavedRulesStore | None" = None,
     ) -> None:
         self.rules = rules or []
         self._default = default_decision
         self._allowed_dirs = [d.resolve() for d in (allowed_dirs or [])]
+        self._saved_store: SavedRulesStore | None = saved_rules_store
 
     def evaluate(
         self,
@@ -60,9 +66,11 @@ class ExecutionPolicy:
     ) -> Decision:
         """Evaluate a tool call against the rule list.
 
-        For filesystem tools (tool_file_read, tool_file_write, tool_file_edit,
-        tool_file_glob, tool_file_grep), checks
-        that the target path is within ``allowed_dirs`` if configured.
+        Evaluation order:
+        1. Path guard (allowed_dirs) — FORBIDDEN if outside.
+        2. Saved user rules (always allow/deny) — highest priority.
+        3. Built-in rules (fnmatch patterns).
+        4. Default decision.
 
         Args:
             tool_name: The tool's name (e.g. ``"tool_file_read"``, ``"tool_bash"``).
@@ -71,6 +79,7 @@ class ExecutionPolicy:
         Returns:
             ``ALLOW``, ``PROMPT``, or ``FORBIDDEN``.
         """
+        # 1. Path guard
         if self._allowed_dirs and tool_name in (
             "tool_file_read",
             "tool_file_write",
@@ -81,11 +90,21 @@ class ExecutionPolicy:
             if not self._check_path_allowed(tool_name, tool_args or {}):
                 return Decision.FORBIDDEN
 
+        # 2. Saved user rules (persistent allow/deny)
+        if self._saved_store is not None:
+            path_val = str((tool_args or {}).get("path", ""))
+            saved = self._saved_store.evaluate(tool_name, path_val)
+            if saved is not None:
+                return saved
+
+        # 3. Built-in rules
         args_str = json.dumps(tool_args or {}, sort_keys=True)
         combined = f"{tool_name}:{args_str}"
         for rule in self.rules:
             if fnmatch(combined, rule.pattern):
                 return rule.decision
+
+        # 4. Default
         return self._default
 
     def _check_path_allowed(

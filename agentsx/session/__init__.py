@@ -12,14 +12,20 @@ Two backends available:
 The ``SessionBackend`` Protocol defines the common interface that all
 backends implement, and ``create_session_store()`` is a factory that
 instantiates the chosen backend by name.
+
+Additionally, ``SessionSnapshot`` provides file-state capture and
+rollback for safe context compaction.
 """
 
 from agentsx.session.protocol import SessionBackend
+from agentsx.session.snapshot import FileSnapshot, SessionSnapshot
 from agentsx.session.store import Session, SessionStore
 
 __all__ = [
+    "FileSnapshot",
     "Session",
     "SessionBackend",
+    "SessionSnapshot",
     "SessionStore",
     "create_session_store",
 ]

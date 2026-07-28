@@ -3,10 +3,17 @@
 Each ``SubAgentRuntime`` runs an independent ReAct loop with its own
 Provider, message state, and tool subset.  Results are returned as plain
 text so the parent agent can consume them via a tool result.
+
+Role isolation (inspired by Hermes-Agent's delegate_tool.py):
+    - ``LEAF``: focused worker, cannot delegate further.
+    - ``ORCHESTRATOR``: can spawn its own child agents.
+
+Tool blocking prevents dangerous operations in child agents.
 """
 
 from collections.abc import AsyncIterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from enum import Enum
 from uuid import uuid4
 
 from agentsx.agent.loop import run_agent_loop
@@ -54,6 +61,26 @@ _SUBAGENT_ALLOWED_TOOLS = {
     "tool_web_search",
 }
 
+# Tools that child agents must never have access to, regardless of role.
+# Inspired by Hermes-Agent's DELEGATE_BLOCKED_TOOLS.
+DELEGATE_BLOCKED_TOOLS: frozenset[str] = frozenset(
+    {
+        "spawn_agent",  # prevent recursive delegation from leaf agents
+    }
+)
+
+
+class SubAgentRole(str, Enum):
+    """Role determining what a sub-agent can do.
+
+    ``LEAF`` is the default: a focused worker that cannot delegate further.
+    ``ORCHESTRATOR`` can spawn its own child agents (bounded by
+    ``max_spawn_depth``).
+    """
+
+    LEAF = "leaf"
+    ORCHESTRATOR = "orchestrator"
+
 
 @dataclass
 class SubAgentConfig:
@@ -70,6 +97,14 @@ class SubAgentConfig:
 
     allowed_tools: list[str] | None = None
     """Tool names the sub-agent may use.  ``None`` = default read-only set."""
+
+    blocked_tools: frozenset[str] = field(
+        default_factory=lambda: DELEGATE_BLOCKED_TOOLS,
+    )
+    """Tool names to always exclude, on top of role-based restrictions."""
+
+    role: SubAgentRole = SubAgentRole.LEAF
+    """Sub-agent role: ``LEAF`` (no delegation) or ``ORCHESTRATOR``."""
 
     timeout: int = 120
     """Wall-clock timeout in seconds (not yet enforced at runtime)."""
@@ -88,6 +123,10 @@ class SubAgentRuntime:
     The ``run()`` method executes a full agent loop and returns the
     final response text.
 
+    Role isolation:
+        - ``LEAF`` agents cannot call ``spawn_agent`` (tool is excluded).
+        - ``ORCHESTRATOR`` agents can spawn children up to ``max_spawn_depth``.
+
     Usage::
 
         config = SubAgentConfig(model_name="gpt-4o")
@@ -99,7 +138,11 @@ class SubAgentRuntime:
         self._id: str = uuid4().hex[:12]
         self._config = config
         self._provider: Provider = create_provider(model_name=config.model_name)
-        self._tools: ToolRegistry = _build_subagent_tools(config.allowed_tools)
+        self._tools: ToolRegistry = _build_subagent_tools(
+            config.allowed_tools,
+            blocked=config.blocked_tools,
+            role=config.role,
+        )
         self._messages: list[AgentMessage] = []
         self._spawn_depth = spawn_depth
 
@@ -127,6 +170,11 @@ class SubAgentRuntime:
     def spawn_depth(self) -> int:
         """Current depth of recursive spawning."""
         return self._spawn_depth
+
+    @property
+    def role(self) -> SubAgentRole:
+        """The sub-agent's role."""
+        return self._config.role
 
     async def run(self, prompt: str) -> str:
         """Run the sub-agent on *prompt* and return the final response.
@@ -163,19 +211,37 @@ class SubAgentRuntime:
         return (
             f"SubAgentRuntime(id={self._id!r}, "
             f"model={self._config.model_name!r}, "
+            f"role={self._config.role.value!r}, "
+            f"depth={self._spawn_depth}, "
             f"steps={self._config.max_steps})"
         )
 
 
 def _build_subagent_tools(
     allowed_tools: list[str] | None,
+    blocked: frozenset[str] | None = None,
+    role: SubAgentRole = SubAgentRole.LEAF,
 ) -> ToolRegistry:
-    """Build a ToolRegistry restricted to *allowed_tools*.
+    """Build a ToolRegistry restricted to *allowed_tools* minus *blocked*.
+
+    Args:
+        allowed_tools: Explicit allow-list.  ``None`` = default read-only set.
+        blocked: Tools to always exclude (on top of role restrictions).
+        role: Sub-agent role.  ``LEAF`` excludes ``spawn_agent``.
 
     When *allowed_tools* is ``None``, uses the default read-only subset
     (excluding write, edit, bash, and other mutation tools).
     """
     names = _SUBAGENT_ALLOWED_TOOLS if allowed_tools is None else set(allowed_tools)
+
+    # Role-based restrictions
+    if role == SubAgentRole.LEAF:
+        names = names - {"spawn_agent"}
+
+    # Explicit block list (always applied)
+    if blocked:
+        names = names - blocked
+
     registry = ToolRegistry()
     for tool_spec in _ALL_BUILTIN_TOOLS:
         if tool_spec.name in names:

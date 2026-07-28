@@ -3,6 +3,10 @@
 Allows the parent agent to delegate tasks to an isolated child agent
 with its own model, message context, and tool subset.
 
+Role isolation (inspired by Hermes-Agent):
+    - ``LEAF`` (default): focused worker, cannot call ``spawn_agent`` again.
+    - ``ORCHESTRATOR``: can spawn its own children (bounded by ``max_spawn_depth``).
+
 Note: imports from ``agentsx.agent.subagent`` and ``agentsx.orchestrator``
 are lazy (inside the function body) to avoid a circular import chain.
 """
@@ -38,6 +42,7 @@ async def spawn_agent(
     model_name: str = "",
     prompt: str = "",
     system_prompt: str = "",
+    role: str = "leaf",
     max_steps: int = 10,
     timeout: int = 120,
     max_spawn_depth: int = 2,
@@ -48,10 +53,15 @@ async def spawn_agent(
     The sub-agent runs independently with its own Provider, message
     history, and restricted tool subset (read-only by default).
 
+    Roles:
+        - ``leaf`` (default): focused worker, cannot delegate further.
+        - ``orchestrator``: can spawn its own children (bounded depth).
+
     Args:
         model_name: Model to use (empty = parent's default model).
         prompt: The detailed task prompt for the sub-agent.
         system_prompt: Optional system prompt for the sub-agent.
+        role: Sub-agent role: ``leaf`` or ``orchestrator``.
         max_steps: Max tool-calling iterations (default 10).
         timeout: Max wall-clock seconds (default 120).
         max_spawn_depth: Maximum depth for recursive spawning (default 2).
@@ -60,18 +70,37 @@ async def spawn_agent(
     Returns:
         The sub-agent's final response as text.
     """
-    from agentsx.agent.subagent import SubAgentConfig  # noqa: PLC0415
+    from agentsx.agent.subagent import (  # noqa: PLC0415
+        SubAgentConfig,
+        SubAgentRole,
+    )
     from agentsx.config import settings
 
     resolved_model = model_name or settings.model_name
+    next_depth = current_depth + 1
+
+    # Enforce depth limit
+    if next_depth > max_spawn_depth:
+        return (
+            f"Sub-agent error: maximum spawn depth ({max_spawn_depth}) "
+            f"exceeded (current depth: {next_depth}). "
+            "Use a shallower delegation chain."
+        )
+
+    # Resolve role
+    try:
+        resolved_role = SubAgentRole(role)
+    except ValueError:
+        resolved_role = SubAgentRole.LEAF
 
     config = SubAgentConfig(
         model_name=resolved_model,
         system_prompt=system_prompt,
         max_steps=max_steps,
         timeout=timeout,
+        role=resolved_role,
         max_spawn_depth=max_spawn_depth,
-        current_depth=current_depth + 1,
+        current_depth=next_depth,
     )
 
     orchestra = _get_orchestra()
