@@ -97,6 +97,8 @@ async def main():
 
 ## Architecture
 
+> Detailed technical solution: [docs/architecture.md](docs/architecture.md) · Usage tutorial: [docs/tutorial.md](docs/tutorial.md)
+
 ```
 agentsx/
 ├── __init__.py           # Package entry

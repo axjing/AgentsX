@@ -4,6 +4,8 @@ AgentsX 是一个轻量级的 AI Agent 运行时框架：以 ReAct（Think → A
 
 本文档面向使用者与二次开发者，覆盖从安装、CLI、Python API 到各子系统（Provider、工具、安全、上下文、会话、扩展、子代理、工作区）的完整使用方式。
 
+> 想了解整体架构与技术方案，请参阅 [架构与技术方案](architecture.md)。
+
 ## 目录
 
 - [1. 特性总览](#1-特性总览)
@@ -73,7 +75,7 @@ cp .env.example .env
 所有配置均通过 `AGENTSX_*` 环境变量或项目根 `.env` 文件读取（Pydantic Settings）。主要配置项：
 
 | 变量 | 默认值 | 说明 |
-|------|--------|------|
+| ------ | -------- | ------ |
 | `AGENTSX_MODEL_NAME` | `gpt-4o` | 默认模型标识 |
 | `AGENTSX_API_KEY` | 空 | 默认 API Key（无 Provider 专用 Key 时的兜底） |
 | `AGENTSX_API_BASE` | 空 | 默认 API Base URL |
@@ -135,7 +137,7 @@ agentsx run "Summarize README.md" --model gpt-4o-mini --max-steps 10
 ### 3.3 CLI 选项
 
 | 选项 | 命令 | 说明 |
-|------|------|------|
+| ------ | ------ | ------ |
 | `--model` / `-m` | chat, run | 模型标识（默认取 `AGENTSX_MODEL_NAME`） |
 | `--system` / `-s` | chat | 系统提示词覆盖 |
 | `--no-tools` | chat, run | 禁用全部内置工具 |
@@ -150,7 +152,7 @@ agentsx run "Summarize README.md" --model gpt-4o-mini --max-steps 10
 `agentsx chat` 中输入 `/` 开头命令：
 
 | 命令 | 说明 |
-|------|------|
+| ------ | ------ |
 | `/sessions` | 列出所有会话 |
 | `/session show <id>` | 查看会话详情 |
 | `/session switch <id>` | 切换到指定会话 |
@@ -247,7 +249,7 @@ async def run_agent_loop(
 Provider 与模型定义集中在 `agentsx/provider/data/catalog.toml`，用户可在 `~/.agentsx/catalog.toml` 覆盖合并。
 
 | Provider | Base URL | 默认模型 | 备注 |
-|----------|----------|----------|------|
+| ---------- | ---------- | ---------- | ------ |
 | openai | `https://api.openai.com/v1` | `gpt-4o` | gpt-4o / gpt-4o-mini / o1 / o3-mini |
 | anthropic | `https://api.anthropic.com/v1` | `claude-sonnet-4-20250514` | 自动附加 `anthropic-version: 2023-06-01` 头 |
 | gemini | `https://generativelanguage.googleapis.com/v1beta/openai/` | `gemini-2.0-flash` | 1M 上下文，OpenAI 兼容格式 |
@@ -350,7 +352,7 @@ print(result.status, result.content)
 内置工具按风险分层组织，统一由 `agentsx.tools.builtin.ALL_TOOLS` 导出：
 
 | 风险层 | 工具 | 说明 |
-|--------|------|------|
+| -------- | ------ | ------ |
 | read | `tool_file_read` | 读取文件（支持 offset/limit） |
 | read | `tool_file_glob` | 按模式匹配文件路径 |
 | read | `tool_file_grep` | 内容正则搜索 |
@@ -439,7 +441,7 @@ print(result.threat_level)  # FORBIDDEN
 防止工具输出淹没上下文。默认值：
 
 | 限制 | 默认 |
-|------|------|
+| ------ | ------ |
 | `max_output_chars` | 50,000 |
 | `max_file_read_lines` | 10,000 |
 | `max_glob_results` | 1,000 |
@@ -568,7 +570,7 @@ branch = store.branch(source_id, title="experiment", reason="user")
 观察者事件：
 
 | 常量 | 触发时机 |
-|------|----------|
+| ------ | ---------- |
 | `EVENT_ON_LOOP_START` | Agent 循环开始 |
 | `EVENT_ON_LOOP_END` | Agent 循环结束（正常或出错） |
 | `EVENT_ON_MODEL_REQUEST` | 即将调用 LLM |
@@ -710,7 +712,7 @@ skills = discover_skills()       # DiscoveredSkill
 `run_agent_loop` 产出 `AgentEvent`，常用事件：
 
 | 事件 | 说明 |
-|------|------|
+| ------ | ------ |
 | `AgentStartEvent` / `AgentEndEvent` | 循环起止 |
 | `ModelRequestEvent` | 即将请求模型 |
 | `ModelResponseEvent` | 模型响应；`delta=True` 为流式增量，`delta=False` 为最终完整内容 |
@@ -741,7 +743,7 @@ Provider 调用使用 `retry_async` 装饰器实现指数退避 + 抖动（jitte
 完整的 `AGENTSX_*` 环境变量清单（对应 `agentsx/config.py` 的 `AgentsXSettings`）：
 
 | 变量 | 默认值 | 说明 |
-|------|--------|------|
+| ------ | -------- | ------ |
 | `AGENTSX_MODEL_NAME` | `gpt-4o` | 默认模型 |
 | `AGENTSX_API_KEY` | 空 | 默认 API Key |
 | `AGENTSX_API_BASE` | 空 | 默认 API Base |
