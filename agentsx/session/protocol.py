@@ -5,8 +5,6 @@ components like ``AgentHarness`` can depend on the Protocol rather than
 a concrete class.
 """
 
-from __future__ import annotations
-
 from typing import Any, Protocol
 
 
@@ -25,7 +23,7 @@ class SessionBackend(Protocol):
         """Load session metadata by ID."""
         ...
 
-    def get_messages(self, session_id: str) -> list:
+    def get_messages(self, session_id: str) -> list[Any]:
         """Load all messages for a session."""
         ...
 
@@ -33,7 +31,7 @@ class SessionBackend(Protocol):
         """Append a single message to the session."""
         ...
 
-    def list_sessions(self) -> list:
+    def list_sessions(self) -> list[Any]:
         """Return all sessions, newest first."""
         ...
 
@@ -46,6 +44,7 @@ class SessionBackend(Protocol):
         session_id: str,
         title: str = "",
         from_message_index: int | None = None,
+        reason: str = "user",
     ) -> Any:
         """Create a new session that inherits message history."""
         ...

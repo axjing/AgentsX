@@ -10,7 +10,7 @@ from agentsx.provider.catalog import (
 class TestEntriesFromRaw:
     """Test raw TOML → ProviderEntry conversion."""
 
-    def test_minimal_entry(self):
+    def test_minimal_entry(self) -> None:
         raw = [{"name": "test", "base_url": "http://localhost"}]
         entries = _entries_from_raw(raw)
         assert "test" in entries
@@ -19,7 +19,7 @@ class TestEntriesFromRaw:
         assert entries["test"].api_format == "openai"  # default
         assert entries["test"].models == {}
 
-    def test_full_entry(self):
+    def test_full_entry(self) -> None:
         raw = [
             {
                 "name": "openai",
@@ -53,7 +53,7 @@ class TestEntriesFromRaw:
 class TestMergeCatalogs:
     """Test builtin + user catalog merging."""
 
-    def test_user_overrides_builtin(self):
+    def test_user_overrides_builtin(self) -> None:
         builtin = _entries_from_raw(
             [
                 {
@@ -68,7 +68,7 @@ class TestMergeCatalogs:
         assert merged["openai"].default_model == "gpt-4o-mini"
         assert merged["openai"].base_url == "https://api.openai.com/v1"  # preserved
 
-    def test_user_adds_new_provider(self):
+    def test_user_adds_new_provider(self) -> None:
         builtin = _entries_from_raw(
             [{"name": "openai", "base_url": "https://api.openai.com/v1"}]
         )
@@ -79,7 +79,7 @@ class TestMergeCatalogs:
         assert "openai" in merged
         assert "my-llm" in merged
 
-    def test_model_merge(self):
+    def test_model_merge(self) -> None:
         builtin = _entries_from_raw(
             [
                 {
@@ -105,7 +105,7 @@ class TestMergeCatalogs:
 class TestResolveModel:
     """Test model name → (ProviderEntry, clean_model) resolution."""
 
-    def test_slash_notation(self):
+    def test_slash_notation(self) -> None:
         catalog = _entries_from_raw(
             [
                 {
@@ -126,7 +126,7 @@ class TestResolveModel:
         assert entry.name == "openai"
         assert model == "gpt-4o"
 
-    def test_exact_model_lookup(self):
+    def test_exact_model_lookup(self) -> None:
         catalog = _entries_from_raw(
             [
                 {
@@ -142,7 +142,7 @@ class TestResolveModel:
         assert entry.name == "openai"
         assert model == "gpt-4o"
 
-    def test_prefix_matching(self):
+    def test_prefix_matching(self) -> None:
         catalog = _entries_from_raw(
             [
                 {
@@ -159,7 +159,7 @@ class TestResolveModel:
         assert entry.name == "openai"
         assert model == "gpt-4o"
 
-    def test_qwen_model(self):
+    def test_qwen_model(self) -> None:
         catalog = _entries_from_raw(
             [
                 {
@@ -176,7 +176,7 @@ class TestResolveModel:
         assert entry.name == "qwen"
         assert model == "qwen3.6-plus"
 
-    def test_not_found(self):
+    def test_not_found(self) -> None:
         catalog = _entries_from_raw(
             [
                 {
@@ -189,7 +189,7 @@ class TestResolveModel:
         result = resolve_model("unknown-model", catalog)
         assert result is None
 
-    def test_provider_hint_unknown_provider(self):
+    def test_provider_hint_unknown_provider(self) -> None:
         """Unknown provider hint returns None."""
         catalog = _entries_from_raw(
             [

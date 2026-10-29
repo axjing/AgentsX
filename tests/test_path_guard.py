@@ -3,6 +3,8 @@
 import tempfile
 from pathlib import Path
 
+import pytest
+
 from agentsx.security.path_guard import PathGuard, _has_traversal_pattern
 
 
@@ -54,7 +56,10 @@ class TestPathGuard:
             target = workspace / "target.txt"
             target.write_text("data")
             link = workspace / "link"
-            link.symlink_to(target)
+            try:
+                link.symlink_to(target)
+            except OSError:
+                pytest.skip("Symlink creation requires elevated privileges on Windows")
             guard = PathGuard(workspace=workspace, allow_symlinks=False)
             result = guard.check(str(link))
             assert not result.is_safe
@@ -66,7 +71,10 @@ class TestPathGuard:
             target = workspace / "target.txt"
             target.write_text("data")
             link = workspace / "link"
-            link.symlink_to(target)
+            try:
+                link.symlink_to(target)
+            except OSError:
+                pytest.skip("Symlink creation requires elevated privileges on Windows")
             guard = PathGuard(workspace=workspace, allow_symlinks=True)
             result = guard.check(str(link))
             assert result.is_safe

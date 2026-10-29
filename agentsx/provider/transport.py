@@ -15,10 +15,9 @@ from typing import Any
 from agentsx.protocol.events import (
     StreamEvent,
     TextStreamEvent,
-    ToolCall,
     ToolCallStreamEvent,
 )
-from agentsx.protocol.messages import AgentMessage, MessageRole
+from agentsx.protocol.messages import AgentMessage, MessageRole, ToolCall
 from agentsx.provider.converters import (
     message_to_anthropic,
     message_to_openai,

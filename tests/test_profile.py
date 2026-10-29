@@ -3,6 +3,7 @@
 import dataclasses
 import tempfile
 from dataclasses import FrozenInstanceError
+from pathlib import Path
 
 import pytest
 
@@ -12,6 +13,8 @@ from agentsx.workspace.context_profile import (
     get_profile,
     resolve_runtime_mode,
 )
+
+_REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_context_profile_frozen() -> None:
@@ -29,7 +32,7 @@ def test_context_profile_frozen() -> None:
 
 def test_resolve_runtime_mode_in_git_repo() -> None:
     """Resolve should return 'coding' for a git repo with source files."""
-    mode = resolve_runtime_mode(cwd="d:/An/CODE/AgentsX")
+    mode = resolve_runtime_mode(cwd=_REPO_ROOT)
     assert mode.name == "coding"
 
 
@@ -42,7 +45,7 @@ def test_resolve_runtime_mode_empty_dir() -> None:
 
 def test_runtime_mode_toolset_filter() -> None:
     """Coding profile should have a non-empty toolset filter."""
-    mode = resolve_runtime_mode(cwd="d:/An/CODE/AgentsX")
+    mode = resolve_runtime_mode(cwd=_REPO_ROOT)
     assert mode.toolset_filter == frozenset({"read", "write", "exec", "orchestration"})
 
 

@@ -6,8 +6,8 @@ from typing import Any
 import pytest
 
 from agentsx.protocol.errors import ProviderError
-from agentsx.protocol.messages import AgentMessage
 from agentsx.protocol.events import StreamEvent
+from agentsx.protocol.messages import AgentMessage
 from agentsx.provider import (
     _PROVIDER_REGISTRY,
     Model,

@@ -12,7 +12,7 @@ from rich.panel import Panel
 from agentsx.cli import commands
 from agentsx.protocol.events import ToolExecutionEvent
 from agentsx.protocol.messages import AgentMessage
-from agentsx.session.store import SessionStore
+from agentsx.session.protocol import SessionBackend
 
 console = Console()
 logger = logging.getLogger(__name__)
@@ -39,7 +39,7 @@ def display_tool_event(event: ToolExecutionEvent) -> None:
 def handle_command(
     cmd: str,
     messages: list[AgentMessage],
-    store: SessionStore | None = None,
+    store: SessionBackend | None = None,
     session_id: str = "",
     model_name: str = "unknown",
 ) -> tuple[str | None, str]:

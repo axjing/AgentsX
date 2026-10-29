@@ -1,6 +1,7 @@
 """Tests for security policy (``agentsx/security.py``)."""
 
 from collections.abc import AsyncIterator
+from pathlib import Path
 
 import pytest
 
@@ -150,6 +151,20 @@ class TestExecutionPolicy:
     def test_default_factory_unknown_is_prompt(self) -> None:
         policy = ExecutionPolicy.default()
         assert policy.evaluate("unknown_tool", {}) == Decision.PROMPT
+
+    def test_command_guard_blocks_destructive_bash(self) -> None:
+        policy = ExecutionPolicy.default()
+        assert (
+            policy.evaluate("tool_bash", {"command": "rm -rf /"}) == Decision.FORBIDDEN
+        )
+
+    def test_default_factory_with_allowed_dirs(self) -> None:
+        policy = ExecutionPolicy.default(allowed_dirs=[Path("/my/workspace")])
+        assert len(policy._allowed_dirs) == 1
+        assert (
+            policy.evaluate("tool_file_read", {"path": "/etc/passwd"})
+            == Decision.FORBIDDEN
+        )
 
 
 # ── Integration with agent loop ──────────────────────────────

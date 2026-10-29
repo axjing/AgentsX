@@ -9,6 +9,7 @@ Usage::
 
 import asyncio
 import logging
+from pathlib import Path
 
 import typer
 from prompt_toolkit import PromptSession
@@ -17,7 +18,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from agentsx.agent.loop import run_agent_loop
+from agentsx.agent.harness import AgentHarness
 from agentsx.cli import repl
 from agentsx.config import get_settings
 from agentsx.protocol.errors import SessionError
@@ -35,7 +36,7 @@ from agentsx.protocol.messages import (
 )
 from agentsx.provider import create_provider
 from agentsx.security.policy import ExecutionPolicy
-from agentsx.session.store import SessionStore
+from agentsx.session import create_session_store
 from agentsx.tools import ToolRegistry
 from agentsx.tools.builtin import ALL_TOOLS
 
@@ -112,18 +113,28 @@ def chat(  # noqa: B008
         "-v",
         help="Video file path(s) to include in the first message",
     ),
+    backend: str = typer.Option(
+        "jsonl",
+        "--backend",
+        "-b",
+        help="Session storage backend (jsonl or sqlite)",
+    ),
 ) -> None:
     """Start an interactive chat session with an AI agent."""
     asyncio.run(
         _async_chat(
-            model,
-            system,
-            no_tools,
-            max_steps,
-            allow_all,
-            session,
-            timeout,
-            workspace,
+            model_name=model,
+            system_prompt=system,
+            no_tools=no_tools,
+            max_steps=max_steps,
+            allow_all=allow_all,
+            session_id=session,
+            timeout=timeout,
+            workspace=workspace,
+            image=image,
+            audio=audio,
+            video=video,
+            backend=backend,
         ),
     )
 
@@ -179,14 +190,6 @@ async def _async_run(
     resolved_model = model_name or settings.model_name
     provider = create_provider(model_name=resolved_model)
 
-    messages: list[AgentMessage] = []
-    system_prompt = settings.system_prompt
-    if system_prompt:
-        messages.append(
-            AgentMessage(role=MessageRole.SYSTEM, content=system_prompt),
-        )
-    messages.append(AgentMessage(role=MessageRole.USER, content=prompt))
-
     registry: ToolRegistry | None = None
     if not no_tools:
         registry = ToolRegistry()
@@ -200,15 +203,15 @@ async def _async_run(
         policy = ExecutionPolicy.default()
 
     loop_timeout = timeout or settings.loop_timeout
-    result_parts: list[str] = []
-    async for event in run_agent_loop(
-        provider,
-        messages,
-        steps,
-        registry,
+    harness = AgentHarness(
+        provider=provider,
+        system_prompt=settings.system_prompt or None,
+        tools=registry,
         policy=policy,
-        timeout=loop_timeout,
-    ):
+        max_steps=steps,
+    )
+    result_parts: list[str] = []
+    async for event in harness.prompt(prompt, timeout=loop_timeout):
         if isinstance(event, ModelResponseEvent) and not event.delta:
             result_parts.append(event.content)
         elif isinstance(event, ToolExecutionEvent):
@@ -275,6 +278,7 @@ async def _async_chat(
     image: list[str] | None = None,
     audio: list[str] | None = None,
     video: list[str] | None = None,
+    backend: str = "jsonl",
 ) -> None:
     settings = get_settings()
 
@@ -283,7 +287,7 @@ async def _async_chat(
     provider = create_provider(model_name=resolved_model)
 
     # ── Session store ────────────────────────────────────────────────
-    store = SessionStore()
+    store = create_session_store(backend=backend)
     if session_id:
         try:
             sess = store.get(session_id)
@@ -303,10 +307,6 @@ async def _async_chat(
 
     # ── Conversation history (shared across turns) ───────────────────
     prompt_text = system_prompt or settings.system_prompt
-    if prompt_text:
-        messages.append(
-            AgentMessage(role=MessageRole.SYSTEM, content=prompt_text),
-        )
 
     # ── Tool registry ────────────────────────────────────────────────
     registry: ToolRegistry | None = None
@@ -318,14 +318,27 @@ async def _async_chat(
 
     # ── Security policy ──────────────────────────────────────────────
     if allow_all:
-        policy = ExecutionPolicy(default_decision=Decision.ALLOW)
+        policy = ExecutionPolicy(
+            default_decision=Decision.ALLOW,
+            allowed_dirs=[Path(workspace).resolve()] if workspace else None,
+        )
     elif workspace:
-        from pathlib import Path  # noqa: PLC0415
-
-        policy = ExecutionPolicy.default()
-        policy._allowed_dirs = [Path(workspace).resolve()]
+        policy = ExecutionPolicy.default(allowed_dirs=[Path(workspace).resolve()])
     else:
         policy = ExecutionPolicy.default()
+
+    # ── Agent Harness ────────────────────────────────────────────────
+    harness = AgentHarness(
+        provider=provider,
+        system_prompt=prompt_text or None,
+        tools=registry,
+        policy=policy,
+        max_steps=steps,
+        session_store=store,
+        session_id=sess.id,
+    )
+    if messages:
+        harness.load_messages(messages)
 
     # ── Prompt session ───────────────────────────────────────────────
     session = PromptSession[str](history=InMemoryHistory())
@@ -368,7 +381,7 @@ async def _async_chat(
         if user_input.startswith("/"):
             new_id, new_model = repl.handle_command(
                 user_input,
-                messages,
+                harness.messages,
                 store,
                 sess.id,
                 shown_model,
@@ -378,17 +391,17 @@ async def _async_chat(
             if new_id is not None and new_id != sess.id:
                 # Session switch: reload messages
                 sess = store.get(new_id)
-                messages = store.get_messages(new_id)
+                loaded_messages = store.get_messages(new_id)
+                harness.load_messages(loaded_messages)
                 console.print(
                     f"[dim]Loaded session {sess.id[:12]}"
-                    f" ({len(messages)} messages)[/dim]",
+                    f" ({len(loaded_messages)} messages)[/dim]",
                 )
             continue
 
         user_msg = _build_user_message(
             user_input, image_paths, audio_paths, video_paths
         )
-        messages.append(user_msg)
         store.append(sess.id, user_msg)
         image_paths = []
         audio_paths = []
@@ -396,14 +409,7 @@ async def _async_chat(
 
         # ── Process agent loop ───────────────────────────────────────
         content_buffer: list[str] = []
-        async for event in run_agent_loop(
-            provider,
-            messages,
-            steps,
-            registry,
-            policy=policy,
-            timeout=loop_timeout,
-        ):
+        async for event in harness.prompt(user_msg, timeout=loop_timeout):
             if isinstance(event, ModelRequestEvent):
                 console.print("[dim]Processing...[/dim]")
 

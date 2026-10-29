@@ -6,13 +6,14 @@ All session-management commands are defined here and dispatched from
 tuple so the caller can update its state.
 """
 
+from agentsx.context.compaction import compact_messages, should_compact
 from agentsx.protocol.errors import SessionError
 from agentsx.protocol.messages import AgentMessage
-from agentsx.session.store import SessionStore
+from agentsx.session.protocol import SessionBackend
 
 
 def cmd_compact(
-    store: SessionStore,
+    store: SessionBackend,
     session_id: str,
     messages: list[AgentMessage],
     force: bool = False,
@@ -20,7 +21,7 @@ def cmd_compact(
     """Trigger manual context compaction.
 
     Args:
-        store: SessionStore instance.
+        store: SessionBackend instance.
         session_id: Current session ID.
         messages: Current conversation messages (replaced on success).
         force: If True, skip the ``should_compact()`` threshold check.
@@ -28,11 +29,6 @@ def cmd_compact(
     Returns:
         (status_message, new_message_count).
     """
-    from agentsx.context.compaction import (  # noqa: PLC0415
-        compact_messages,
-        should_compact,
-    )
-
     if not force and not should_compact(messages):
         return (
             f"No compaction needed ({len(messages)} messages). "
@@ -71,7 +67,7 @@ def cmd_compact(
 
 
 def cmd_sessions(
-    store: SessionStore,
+    store: SessionBackend,
     current_id: str,
 ) -> tuple[str, str]:
     """List all sessions, marking the active one.
@@ -79,7 +75,7 @@ def cmd_sessions(
     Returns:
         (formatted_table, current_id_unchanged).
     """
-    sessions = store.list()
+    sessions = store.list_sessions()
     if not sessions:
         return "No sessions yet.  Start a new chat to create one.", current_id
 
@@ -94,7 +90,7 @@ def cmd_sessions(
 
 
 def cmd_session_show(
-    store: SessionStore,
+    store: SessionBackend,
     _current_id: str,
     session_id: str,
 ) -> tuple[str, str]:
@@ -126,7 +122,7 @@ def cmd_session_show(
 
 
 def cmd_session_switch(
-    store: SessionStore,
+    store: SessionBackend,
     _current_id: str,
     session_id: str,
 ) -> tuple[str, str]:
@@ -139,7 +135,7 @@ def cmd_session_switch(
 
 
 def cmd_new(
-    store: SessionStore,
+    store: SessionBackend,
     _current_id: str,
     title: str = "",
     model_name: str = "unknown",
@@ -153,7 +149,7 @@ def cmd_new(
 
 
 def cmd_delete(
-    store: SessionStore,
+    store: SessionBackend,
     current_id: str,
     session_id: str,
 ) -> tuple[str, str]:
@@ -168,7 +164,7 @@ def cmd_delete(
 
 
 def cmd_branch(
-    store: SessionStore,
+    store: SessionBackend,
     _current_id: str,
     source_id: str,
     title: str = "",
@@ -185,7 +181,7 @@ def cmd_branch(
 
 
 def cmd_title(
-    store: SessionStore,
+    store: SessionBackend,
     current_id: str,
     title: str,
 ) -> tuple[str, str]:

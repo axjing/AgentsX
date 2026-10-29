@@ -1,5 +1,8 @@
 """Filesystem read-only tools."""
 
+import fnmatch
+import os
+import re
 from pathlib import Path
 
 from agentsx.tools import tool
@@ -47,10 +50,6 @@ def tool_file_grep(
     include: str = "*.py",
     root: str = ".",
 ) -> str:
-    import fnmatch
-    import os
-    import re
-
     root_path = Path(root)
     if not root_path.is_dir():
         return f"Error: not a directory: {root}"

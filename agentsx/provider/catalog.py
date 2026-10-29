@@ -9,17 +9,17 @@ live in data, not code.  Adding a new model requires only editing a
 TOML file.
 """
 
-from __future__ import annotations
-
 import logging
+import sys
 from dataclasses import dataclass, field
 from functools import cache
 from pathlib import Path
+from typing import Any
 
-try:
-    import tomllib  # Python 3.11+
-except ImportError:
-    import tomli as tomllib  # type: ignore[import-not-found, no-redef]
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib
 
 logger = logging.getLogger(__name__)
 
@@ -58,9 +58,10 @@ class ProviderEntry:
 # ── Loading ────────────────────────────────────────────────────────────
 
 
-def _parse_catalog(path: Path) -> dict:
+def _parse_catalog(path: Path) -> dict[str, Any]:
     """Parse a TOML catalog file. Returns the raw dict."""
-    return tomllib.loads(path.read_text(encoding="utf-8"))
+    result: dict[str, Any] = tomllib.loads(path.read_text(encoding="utf-8"))
+    return result
 
 
 @cache
@@ -88,7 +89,7 @@ def _load_user_catalog() -> dict[str, ProviderEntry]:
         return {}
 
 
-def _entries_from_raw(providers_raw: list[dict]) -> dict[str, ProviderEntry]:
+def _entries_from_raw(providers_raw: list[dict[str, Any]]) -> dict[str, ProviderEntry]:
     """Convert a list of raw TOML provider dicts to ``ProviderEntry`` objects."""
     entries: dict[str, ProviderEntry] = {}
     for p in providers_raw:

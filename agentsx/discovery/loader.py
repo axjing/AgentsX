@@ -4,13 +4,12 @@ Inspired by Claude Code's file-system-based plugin discovery:
 put .md files in the right directories and they auto-discover.
 """
 
-from __future__ import annotations
-
 import logging
 import re
 from pathlib import Path
 from typing import Any
 
+from agentsx.config import get_settings
 from agentsx.discovery.models import CommandArg, DiscoveredCommand, DiscoveredSkill
 
 logger = logging.getLogger(__name__)
@@ -41,25 +40,43 @@ def parse_frontmatter(content: str) -> tuple[dict[str, Any], str]:
     body = match.group(2).strip()
 
     parsed: dict[str, Any] = {}
-    for line in raw_frontmatter.split("\n"):
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        if ":" in line:
-            key, _, value = line.partition(":")
-            key = key.strip()
-            value = value.strip()
-            value = value.strip('"').strip("'")
-            if value.lower() in ("true", "yes"):
-                value = True
-            elif value.lower() in ("false", "no"):
-                value = False
-            parsed[key] = value
+    current_list_key: str | None = None
 
-    # Parse nested structures (list fields like arguments, trigger_patterns)
-    _parse_list_field(parsed, "arguments")
-    _parse_list_field(parsed, "trigger_patterns")
-    _parse_list_field(parsed, "allowed_tools")
+    for line in raw_frontmatter.split("\n"):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+
+        if stripped.startswith("- "):
+            item = stripped[2:].strip().strip('"').strip("'")
+            if current_list_key:
+                if not isinstance(parsed.get(current_list_key), list):
+                    parsed[current_list_key] = []
+                parsed[current_list_key].append(item)
+            continue
+
+        if ":" in stripped:
+            key, _, value = stripped.partition(":")
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if not value:
+                current_list_key = key
+                parsed[key] = []
+            else:
+                current_list_key = None
+                if value.lower() in ("true", "yes"):
+                    parsed[key] = True
+                elif value.lower() in ("false", "no"):
+                    parsed[key] = False
+                elif value.startswith("[") and value.endswith("]"):
+                    items = [
+                        x.strip().strip('"').strip("'")
+                        for x in value[1:-1].split(",")
+                        if x.strip()
+                    ]
+                    parsed[key] = items
+                else:
+                    parsed[key] = value
 
     return parsed, body
 
@@ -218,48 +235,42 @@ def discover_commands() -> list[DiscoveredCommand]:
     1. User global: ``~/.agentsx/commands/``
     2. Project local: ``<cwd>/.agentsx/commands/``
     """
-    from agentsx.config import get_settings  # noqa: PLC0415
-
     settings = get_settings()
     base = Path(settings.discovery_dir or Path.home() / ".agentsx")
 
-    commands: list[DiscoveredCommand] = []
-
-    user_dir = base / "commands"
-    commands.extend(scan_commands(user_dir))
+    user_commands: dict[str, DiscoveredCommand] = {
+        cmd.name: cmd for cmd in scan_commands(base / "commands")
+    }
 
     project_dir = Path.cwd() / ".agentsx" / "commands"
-    if project_dir.is_dir():
-        existing_names = {c.name for c in commands}
-        for cmd in scan_commands(project_dir):
-            if cmd.name not in existing_names:
-                commands.append(cmd)
+    project_commands: dict[str, DiscoveredCommand] = (
+        {cmd.name: cmd for cmd in scan_commands(project_dir)}
+        if project_dir.is_dir()
+        else {}
+    )
 
-    return commands
+    merged = {**user_commands, **project_commands}
+    return list(merged.values())
 
 
 def discover_skills() -> list[DiscoveredSkill]:
     """Discover skills from all standard locations.
 
-    Search order:
+    Search order (later overrides earlier):
     1. User global: ``~/.agentsx/skills/``
     2. Project local: ``<cwd>/.agentsx/skills/``
     """
-    from agentsx.config import get_settings  # noqa: PLC0415
-
     settings = get_settings()
     base = Path(settings.discovery_dir or Path.home() / ".agentsx")
 
-    skills: list[DiscoveredSkill] = []
-
-    user_dir = base / "skills"
-    skills.extend(scan_skills(user_dir))
+    user_skills: dict[str, DiscoveredSkill] = {
+        sk.name: sk for sk in scan_skills(base / "skills")
+    }
 
     project_dir = Path.cwd() / ".agentsx" / "skills"
-    if project_dir.is_dir():
-        existing_names = {s.name for s in skills}
-        for sk in scan_skills(project_dir):
-            if sk.name not in existing_names:
-                skills.append(sk)
+    project_skills: dict[str, DiscoveredSkill] = (
+        {sk.name: sk for sk in scan_skills(project_dir)} if project_dir.is_dir() else {}
+    )
 
-    return skills
+    merged = {**user_skills, **project_skills}
+    return list(merged.values())

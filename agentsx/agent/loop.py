@@ -29,7 +29,7 @@ from collections import deque
 from collections.abc import AsyncIterator
 from typing import TypeAlias
 
-from agentsx.config import get_settings
+from agentsx.config import AgentsXSettings, get_settings
 from agentsx.context.compaction import compact_messages_with_pruning, should_compact
 from agentsx.extensions.api import (
     EVENT_ON_ERROR,
@@ -44,6 +44,11 @@ from agentsx.extensions.api import (
     ExtensionAPI,
     ExtensionEvent,
     InterceptorEvent,
+)
+from agentsx.protocol.errors import (
+    ClassifiedError,
+    ProviderError,
+    classify_api_error,
 )
 from agentsx.protocol.events import (
     AgentEndEvent,
@@ -140,7 +145,7 @@ async def _process_provider_stream(
     provider: Provider,
     messages: list[AgentMessage],
     step: int,
-    settings,
+    settings: AgentsXSettings,
     extensions: ExtensionAPI | None,
     result: _StreamResult,
 ) -> AsyncIterator[AgentEvent]:
@@ -182,11 +187,6 @@ async def _process_provider_stream(
         result.content = _SENTINEL_ERROR
         return
     except Exception as exc:  # noqa: BLE001
-        from agentsx.protocol.errors import (  # noqa: PLC0415
-            ProviderError,
-            classify_api_error,
-        )
-
         error = exc
         if not isinstance(error, ProviderError):
             error = ProviderError(str(exc))
@@ -217,7 +217,7 @@ class _ProviderStreamError(Exception):
 
     def __init__(
         self,
-        classified,
+        classified: ClassifiedError,
         error: Exception,
         original: Exception,
     ) -> None:

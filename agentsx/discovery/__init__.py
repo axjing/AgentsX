@@ -17,8 +17,6 @@ Usage::
         print(f"  {sk.name} — {sk.description}")
 """
 
-from __future__ import annotations
-
 from agentsx.discovery.loader import discover_commands, discover_skills
 from agentsx.discovery.models import (
     CommandArg,

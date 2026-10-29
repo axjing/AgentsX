@@ -16,7 +16,6 @@ from agentsx.protocol.events import (
     RetryEvent,
     TextDeltaEvent,
     TextStreamEvent,
-    ToolExecutionEvent,
     TurnEndEvent,
     TurnStartEvent,
 )
@@ -58,7 +57,8 @@ class FailingProvider(Provider):
     ) -> AsyncIterator[TextStreamEvent]:
         msg = "API failure"
         raise RuntimeError(msg)
-        yield  # noqa: UNR
+        if False:
+            yield TextStreamEvent(text="")
 
     def format_messages(self, messages: list[AgentMessage]) -> list[dict[str, Any]]:
         return []
@@ -137,7 +137,7 @@ class TestRunAgentLoop:
             assert isinstance(events[i], RetryEvent)
         assert isinstance(events[6], ErrorEvent)
         assert "retries exhausted" in str(events[6].error)
-        assert "FailoverReason.UNKNOWN" in events[6].context
+        assert "unknown" in events[6].context
 
 
 class TestAgent:

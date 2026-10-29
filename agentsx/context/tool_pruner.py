@@ -30,7 +30,7 @@ def _summarize_bash(args: dict[str, object], content: str) -> str:
     cmd = str(args.get("command", ""))
     if len(cmd) > 80:
         cmd = cmd[:77] + "..."
-    exit_match = re.search(r'"exit_code"\s*:\s*(-?\d+)', content)
+    exit_match = re.search(r'(?:"exit_code"\s*:\s*|Exit code:\s*)(-?\d+)', content)
     exit_code = exit_match.group(1) if exit_match else "?"
     lines = content.count("\n") + 1 if content.strip() else 0
     return f"[terminal] ran `{cmd}` -> exit {exit_code}, {lines} lines output"
@@ -62,7 +62,14 @@ def _summarize_grep(args: dict[str, object], content: str) -> str:
     pattern = str(args.get("pattern", "?"))
     path = str(args.get("path", "."))
     match_count = re.search(r'"total_count"\s*:\s*(\d+)', content)
-    count = match_count.group(1) if match_count else "?"
+    if match_count:
+        count = match_count.group(1)
+    elif content.strip() and not content.startswith(("No matches", "Error:")):
+        count = str(len(content.strip().splitlines()))
+    elif "No matches" in content:
+        count = "0"
+    else:
+        count = "?"
     return f"[grep] '{pattern}' in {path} -> {count} matches"
 
 

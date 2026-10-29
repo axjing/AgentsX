@@ -226,9 +226,7 @@ def _build_structured_summary(
     if existing_summary:
         # Extract the old summary's sections (best-effort)
         summary = (
-            f"{summary}\n\n"
-            f"Previous summary (also reference-only):\n"
-            f"{existing_summary}"
+            f"{summary}\n\nPrevious summary (also reference-only):\n{existing_summary}"
         )
 
     return summary
@@ -240,10 +238,7 @@ def _find_existing_summary(messages: list[AgentMessage]) -> str | None:
     Returns the summary content if found, None otherwise.
     """
     for msg in messages:
-        if (
-            msg.role == MessageRole.USER
-            and "[CONTEXT COMPACTION" in msg.content
-        ):
+        if msg.role == MessageRole.USER and "[CONTEXT COMPACTION" in msg.content:
             return msg.content
     return None
 

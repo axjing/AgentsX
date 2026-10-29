@@ -1,7 +1,5 @@
 """Tests for saved rules persistence (``agentsx/security/saved_rules.py``)."""
 
-import json
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -118,10 +116,13 @@ class TestExecutionPolicyWithSavedRules:
 
         policy = ExecutionPolicy(saved_rules_store=store)
         # Default would be PROMPT, but saved rule says ALLOW
-        assert policy.evaluate(
-            "tool_file_write",
-            {"path": "/tmp/test.py"},
-        ) == Decision.ALLOW
+        assert (
+            policy.evaluate(
+                "tool_file_write",
+                {"path": "/tmp/test.py"},
+            )
+            == Decision.ALLOW
+        )
 
     def test_saved_forbid_overrides_built_in(self, tmp_path: Path) -> None:
         from agentsx.security.policy import ExecutionPolicy, Rule
@@ -134,10 +135,13 @@ class TestExecutionPolicyWithSavedRules:
             saved_rules_store=store,
         )
         # Built-in says ALLOW, but saved rule says FORBIDDEN
-        assert policy.evaluate(
-            "tool_file_read",
-            {"path": "/any/file.txt"},
-        ) == Decision.FORBIDDEN
+        assert (
+            policy.evaluate(
+                "tool_file_read",
+                {"path": "/any/file.txt"},
+            )
+            == Decision.FORBIDDEN
+        )
 
     def test_no_saved_rules_falls_through(self, tmp_path: Path) -> None:
         from agentsx.security.policy import ExecutionPolicy

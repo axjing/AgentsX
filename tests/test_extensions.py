@@ -16,8 +16,8 @@ from agentsx.extensions.api import (
     EVENT_ON_TOOL_CALL,
     EVENT_ON_TOOL_RESULT,
     EVENT_POST_TOOL_CALL,
-    EVENT_PRE_TOOL_CALL,
     EVENT_PRE_COMPACT,
+    EVENT_PRE_TOOL_CALL,
     EVENT_SESSION_END,
     EVENT_SESSION_START,
     ExtensionAPI,
@@ -156,7 +156,8 @@ class TestExtensionAPI:
         """emit_interceptor returns the event for inspection."""
 
         async def handler(event: ExtensionEvent) -> None:
-            event.suppress()  # type: ignore[union-attr]
+            assert isinstance(event, InterceptorEvent)
+            event.suppress()
 
         api.on(EVENT_PRE_TOOL_CALL, handler)
         event = InterceptorEvent(
@@ -171,7 +172,8 @@ class TestExtensionAPI:
         """emit_interceptor allows handlers to modify event data."""
 
         async def handler(event: ExtensionEvent) -> None:
-            event.modify({"name": "blocked"})  # type: ignore[union-attr]
+            assert isinstance(event, InterceptorEvent)
+            event.modify({"name": "blocked"})
 
         api.on(EVENT_PRE_TOOL_CALL, handler)
         event = InterceptorEvent(
@@ -183,7 +185,8 @@ class TestExtensionAPI:
         assert result.data["name"] == "blocked"
 
     async def test_emit_interceptor_handler_error_isolation(
-        self, api: ExtensionAPI,
+        self,
+        api: ExtensionAPI,
     ) -> None:
         """A failing interceptor handler does not crash subsequent handlers."""
         calls: list[str] = []

@@ -17,6 +17,8 @@ Additionally, ``SessionSnapshot`` provides file-state capture and
 rollback for safe context compaction.
 """
 
+from typing import Any
+
 from agentsx.session.protocol import SessionBackend
 from agentsx.session.snapshot import FileSnapshot, SessionSnapshot
 from agentsx.session.store import Session, SessionStore
@@ -31,7 +33,7 @@ __all__ = [
 ]
 
 
-def create_session_store(backend: str = "jsonl", **kwargs) -> SessionBackend:
+def create_session_store(backend: str = "jsonl", **kwargs: Any) -> SessionBackend:
     """Factory for session storage backends.
 
     Args:

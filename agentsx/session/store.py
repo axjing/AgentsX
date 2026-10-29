@@ -16,8 +16,7 @@ Design:
     - No database, no migrations
 """
 
-from __future__ import annotations
-
+import builtins
 import json
 import shutil
 import threading
@@ -212,6 +211,7 @@ class SessionStore(SessionBackend):
         session_id: str,
         title: str = "",
         from_message_index: int | None = None,
+        reason: str = "user",
     ) -> Session:
         """Create a new session that inherits message history.
 
@@ -240,7 +240,7 @@ class SessionStore(SessionBackend):
             with open(target_path, "w", encoding="utf-8") as f:
                 for msg in branch_msgs:
                     f.write(_serialize_message(msg) + "\n")
-            self._message_cache[new_id] = list(branch_msgs)
+            self._message_cache[new_id] = builtins.list(branch_msgs)
         elif source_msgs.is_file():
             shutil.copy(source_msgs, new_dir / "messages.jsonl")
 
@@ -355,7 +355,7 @@ class SessionStore(SessionBackend):
         if len(self._message_cache) > self._cache_size:
             self._message_cache.popitem(last=False)
 
-    def list_sessions(self) -> list[Session]:
+    def list_sessions(self) -> builtins.list[Session]:
         """Alias for ``list()`` — return all sessions, newest first."""
         return self.list()
 

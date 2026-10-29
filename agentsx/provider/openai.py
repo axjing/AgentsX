@@ -7,7 +7,8 @@ import httpx
 
 from agentsx.config import get_settings
 from agentsx.protocol.errors import ProviderError
-from agentsx.protocol.events import AgentMessage, StreamEvent
+from agentsx.protocol.events import StreamEvent
+from agentsx.protocol.messages import AgentMessage
 from agentsx.provider import Model, Provider, register_provider
 from agentsx.provider.transport import OpenAITransport
 

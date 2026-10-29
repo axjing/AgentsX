@@ -14,7 +14,23 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from agentsx.security.policy import is_subpath
+
+def is_subpath(target: Path, base: Path) -> bool:
+    """Return True if *target* is inside *base*.
+
+    Handles Windows case-insensitivity and drive letter normalization.
+    """
+    try:
+        t_res = target.resolve()
+        b_res = base.resolve()
+        if os.name == "nt":
+            t_parts = [p.lower() for p in t_res.parts]
+            b_parts = [p.lower() for p in b_res.parts]
+            return len(t_parts) >= len(b_parts) and t_parts[: len(b_parts)] == b_parts
+        t_res.relative_to(b_res)
+        return True
+    except (ValueError, RuntimeError):
+        return False
 
 
 @dataclass

@@ -12,7 +12,11 @@ import importlib
 from agentsx.config import get_settings
 from agentsx.protocol.errors import ProviderError
 from agentsx.provider.abc import Model, Provider
-from agentsx.provider.catalog import load_merged_catalog, resolve_model
+from agentsx.provider.catalog import (
+    ProviderEntry,
+    load_merged_catalog,
+    resolve_model,
+)
 from agentsx.provider.profile import (
     ProviderProfile,
     get_profile,
@@ -24,10 +28,8 @@ from agentsx.provider.registry import _PROVIDER_REGISTRY, register_provider
 __all__ = ["create_provider", "register_provider"]
 
 
-def _entry_to_profile(entry) -> ProviderProfile:
+def _entry_to_profile(entry: ProviderEntry) -> ProviderProfile:
     """Convert a catalog ProviderEntry to a ProviderProfile."""
-    from agentsx.provider.profile import ProviderProfile  # noqa: PLC0415
-
     return ProviderProfile(
         name=entry.name,
         display_name=entry.display_name,

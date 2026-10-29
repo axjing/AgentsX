@@ -4,8 +4,6 @@ Inspired by Claude Code's frontmatter-driven markdown definitions:
 commands, agents, and skills are defined as .md files with YAML frontmatter.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass, field
 from pathlib import Path
 

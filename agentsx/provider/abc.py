@@ -10,10 +10,10 @@ from typing import Any
 
 from agentsx.protocol.errors import ProviderError, RetryExhaustedError
 from agentsx.protocol.events import (
-    AgentMessage,
     RetryEvent,
     StreamEvent,
 )
+from agentsx.protocol.messages import AgentMessage
 from agentsx.provider.profile import ProviderProfile, get_profile
 from agentsx.tools import ToolRegistry
 

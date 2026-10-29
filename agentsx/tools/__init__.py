@@ -16,8 +16,6 @@ Toolset support (inspired by Hermes-Agent's toolset composition):
         registry.disable_toolset("write")
 """
 
-from __future__ import annotations
-
 import inspect
 from collections.abc import Callable
 from typing import Any, TypeVar

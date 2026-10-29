@@ -14,6 +14,7 @@ from collections import deque
 from collections.abc import AsyncIterator, Callable
 
 from agentsx.agent.loop import run_agent_loop
+from agentsx.context.compaction import compact_messages, should_compact
 from agentsx.extensions.api import ExtensionAPI
 from agentsx.protocol.errors import SessionError
 from agentsx.protocol.events import AgentEvent
@@ -104,9 +105,14 @@ class AgentHarness:
 
     # -- Public API --
 
+    def load_messages(self, messages: list[AgentMessage]) -> None:
+        """Replace current message history with the given messages."""
+        self._messages.clear()
+        self._messages.extend(messages)
+
     async def prompt(
         self,
-        user_input: str,
+        user_input: str | AgentMessage,
         *,
         timeout: float = 0,
     ) -> AsyncIterator[AgentEvent]:
@@ -117,15 +123,18 @@ class AgentHarness:
         turns.
 
         Args:
-            user_input: The user's message text.
+            user_input: The user's message text or AgentMessage.
             timeout: Wall-clock timeout in seconds (0 = disabled).
 
         Yields:
             AgentEvent items from the agent loop.
         """
-        self._messages.append(
-            AgentMessage(role=MessageRole.USER, content=user_input),
-        )
+        if isinstance(user_input, AgentMessage):
+            self._messages.append(user_input)
+        else:
+            self._messages.append(
+                AgentMessage(role=MessageRole.USER, content=user_input),
+            )
 
         async for event in self._run_loop(timeout=timeout):
             yield event
@@ -195,11 +204,6 @@ class AgentHarness:
         Returns:
             (status_message, new_message_count).
         """
-        from agentsx.context.compaction import (  # noqa: PLC0415
-            compact_messages,
-            should_compact,
-        )
-
         if not force and not should_compact(self._messages):
             return (
                 f"No compaction needed ({len(self._messages)} messages). "

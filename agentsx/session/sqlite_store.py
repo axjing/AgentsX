@@ -117,8 +117,7 @@ class SQLiteSessionStore(SessionBackend):
 
         CREATE TRIGGER IF NOT EXISTS messages_ad AFTER DELETE ON messages
         BEGIN
-            INSERT INTO messages_fts(messages_fts, rowid, content, session_id)
-            VALUES ('delete', old.id, old.content, old.session_id);
+            DELETE FROM messages_fts WHERE rowid = old.id;
         END;
     """
 
@@ -341,8 +340,8 @@ class SQLiteSessionStore(SessionBackend):
         self,
         session_id: str,
         title: str = "",
-        reason: str = "user",
         from_message_index: int | None = None,
+        reason: str = "user",
     ) -> SQLiteSession:
         """Create a branched session inheriting message history.
 
@@ -414,28 +413,23 @@ class SQLiteSessionStore(SessionBackend):
         Returns:
             List of (session_id, snippet, rank) tuples.
         """
-        fts_query = query
+        params: list[object] = [query]
+        source_filter = ""
         if source:
-            fts_query = f"{query} AND session_id IN "
-            with self._lock:
-                ids = self._db.execute(
-                    "SELECT id FROM sessions WHERE source = ?",
-                    (source,),
-                ).fetchall()
-            if not ids:
-                return []
-            id_list = ",".join(f"'{r[0]}'" for r in ids)
-            fts_query += f"({id_list})"
+            source_filter = "AND s.source = ? "
+            params.append(source)
+        params.append(limit)
+
+        sql = (
+            "SELECT s.id, snippet(messages_fts, -1, '...', '...', '...', 32), "
+            "rank FROM messages_fts AS m "
+            "JOIN sessions AS s ON s.id = m.session_id "
+            f"WHERE messages_fts MATCH ? {source_filter}"
+            "ORDER BY rank LIMIT ?"
+        )
 
         with self._lock:
-            rows = self._db.execute(
-                "SELECT s.id, snippet(messages_fts, -1, '...', '...', '...', 32), "
-                "rank FROM messages_fts AS m "
-                "JOIN sessions AS s ON s.id = m.session_id "
-                "WHERE messages_fts MATCH ? "
-                "ORDER BY rank LIMIT ?",
-                (fts_query, limit),
-            ).fetchall()
+            rows = self._db.execute(sql, tuple(params)).fetchall()
 
         return [(r[0], r[1], r[2]) for r in rows]
 

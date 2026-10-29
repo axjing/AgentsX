@@ -5,8 +5,6 @@ captures all provider variability (auth, endpoints, capabilities, quirks)
 instead of scattering it across ad-hoc mappings and conditional branches.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass, field
 
 
