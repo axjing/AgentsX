@@ -6,6 +6,12 @@ Inspired by codex `tool_output_limits.py` and hermes-agent
 """
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+from agentsx.config import get_settings
+
+if TYPE_CHECKING:
+    from agentsx.config import AgentsXSettings
 
 
 @dataclass
@@ -38,6 +44,21 @@ class ResourceLimits:
     truncate_tail: int = 1000
     """Characters to keep from the end of long output."""
 
+    @classmethod
+    def from_settings(
+        cls, settings: "AgentsXSettings | None" = None
+    ) -> "ResourceLimits":
+        """Build ResourceLimits dynamically from configuration settings."""
+        cfg = settings or get_settings()
+        max_output = cfg.max_tool_output if cfg.max_tool_output > 0 else 50_000
+        head = min(3000, max_output // 3) if max_output >= 6 else 2
+        tail = min(1000, max_output // 5) if max_output >= 6 else 2
+        return cls(
+            max_output_chars=max_output,
+            truncate_head=head,
+            truncate_tail=tail,
+        )
+
     def truncate_output(self, text: str, label: str = "output") -> str:
         """Truncate text to max_output_chars with a notice."""
         if len(text) <= self.max_output_chars:
@@ -65,10 +86,6 @@ class ResourceLimits:
         return f"{head}\n\n... ({omitted:,} characters omitted) ...\n\n{tail}"
 
 
-# Module-level default limits
-_default_limits = ResourceLimits()
-
-
 def get_limits() -> ResourceLimits:
-    """Return the default resource limits."""
-    return _default_limits
+    """Return resource limits configured from current settings."""
+    return ResourceLimits.from_settings()

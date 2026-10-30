@@ -12,8 +12,13 @@ Inspired by Pi branch-summarization and hermes context_compressor.
 """
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
+from agentsx.protocol.events import TextStreamEvent
 from agentsx.protocol.messages import AgentMessage, MessageRole
+
+if TYPE_CHECKING:
+    from agentsx.provider import Provider
 
 
 @dataclass
@@ -45,7 +50,7 @@ class ContextSummarizer:
         self.max_summary_tokens = max_summary_tokens
 
     def summarize(self, messages: list[AgentMessage]) -> SummaryResult:
-        """Create a summary of older messages.
+        """Create a summary of older messages using statistical heuristic.
 
         Preserves the system message and the last N messages.
         Older messages are condensed into a single summary entry.
@@ -66,13 +71,88 @@ class ContextSummarizer:
 
         system = None
         working = list(messages)
-        if working[0].role == MessageRole.SYSTEM:
+        if working and working[0].role == MessageRole.SYSTEM:
             system = working.pop(0)
 
         preserved = working[-self.max_recent :]
         to_summarize = working[: len(working) - self.max_recent]
 
         summary = self._build_summary(to_summarize)
+
+        preserved_count = len(preserved) + (1 if system else 0) + 1
+        return SummaryResult(
+            summary=summary,
+            original_count=len(messages),
+            preserved_count=preserved_count,
+            removed_count=len(to_summarize),
+        )
+
+    async def summarize_with_provider(
+        self,
+        messages: list[AgentMessage],
+        provider: "Provider",
+    ) -> SummaryResult:
+        """Create a semantic summary of older messages using an LLM provider.
+
+        Extracts goals, accomplishments, modified files, and pending next steps.
+        If provider call fails or times out, falls back to fast statistical summary.
+
+        Args:
+            messages: Full conversation history.
+            provider: LLM provider instance to generate the summary.
+
+        Returns:
+            SummaryResult with semantic summary text and message counts.
+        """
+        if len(messages) <= self.max_recent + 1:
+            return SummaryResult(
+                summary="",
+                original_count=len(messages),
+                preserved_count=len(messages),
+                removed_count=0,
+            )
+
+        system = None
+        working = list(messages)
+        if working and working[0].role == MessageRole.SYSTEM:
+            system = working.pop(0)
+
+        preserved = working[-self.max_recent :]
+        to_summarize = working[: len(working) - self.max_recent]
+
+        history_snippets: list[str] = []
+        for msg in to_summarize:
+            role_str = msg.role.value if hasattr(msg.role, "value") else str(msg.role)
+            content_preview = msg.content[:300] if msg.content else ""
+            if msg.tool_calls:
+                call_names = ", ".join(tc.name for tc in msg.tool_calls)
+                history_snippets.append(
+                    f"[{role_str}] (calls: {call_names}): {content_preview}"
+                )
+            else:
+                history_snippets.append(f"[{role_str}]: {content_preview}")
+        history_text = "\n".join(history_snippets)
+
+        prompt = (
+            "Summarize the conversation history for context compaction.\n"
+            "Provide a concise summary highlighting:\n"
+            "1. Goal & Context: What the user originally requested\n"
+            "2. Progress & Facts: Key findings, decisions, and files modified\n"
+            "3. Current State: Next pending steps or open questions\n\n"
+            f"History:\n{history_text}"
+        )
+
+        try:
+            summary_msg = AgentMessage(role=MessageRole.USER, content=prompt)
+            summary_parts: list[str] = []
+            async for event in provider.stream([summary_msg]):
+                if isinstance(event, TextStreamEvent):
+                    summary_parts.append(event.text)
+            summary = "".join(summary_parts).strip()
+            if not summary:
+                summary = self._build_summary(to_summarize)
+        except Exception:  # noqa: BLE001
+            summary = self._build_summary(to_summarize)
 
         preserved_count = len(preserved) + (1 if system else 0) + 1
         return SummaryResult(

@@ -1,7 +1,7 @@
 """Context management for long conversations.
 
 Provides token-count based compaction, trajectory tracking,
-and LLM-driven summarization.
+LLM-driven summarization, and task planning.
 """
 
 from agentsx.context.compaction import (
@@ -12,6 +12,7 @@ from agentsx.context.compaction import (
     should_compact,
 )
 from agentsx.context.manager import ContextManager
+from agentsx.context.plan import TaskItem, TaskPlan, TaskStatus, get_active_plan
 from agentsx.context.summarizer import ContextSummarizer, SummaryResult
 from agentsx.context.tool_pruner import (
     prune_messages_for_compaction,
@@ -28,8 +29,12 @@ __all__ = [
     "ContextManager",
     "ContextSummarizer",
     "SummaryResult",
+    "TaskItem",
+    "TaskPlan",
+    "TaskStatus",
     "Trajectory",
     "TrajectoryEntry",
+    "get_active_plan",
     "prune_messages_for_compaction",
     "summarize_tool_call",
 ]

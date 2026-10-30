@@ -1,5 +1,6 @@
 """Tests for resource limits."""
 
+from agentsx.config import AgentsXSettings
 from agentsx.security.resource_limits import ResourceLimits, get_limits
 
 
@@ -32,11 +33,17 @@ class TestResourceLimits:
         result = limits.truncate_output(text)
         assert result.startswith("hello")
 
-    def test_get_limits_singleton(self) -> None:
+    def test_get_limits(self) -> None:
         limits = get_limits()
         assert isinstance(limits, ResourceLimits)
-        # Should return the same instance
-        assert get_limits() is limits
+        assert limits.max_output_chars > 0
+
+    def test_from_settings(self) -> None:
+        custom_cfg = AgentsXSettings(max_tool_output=12_000)
+        limits = ResourceLimits.from_settings(custom_cfg)
+        assert limits.max_output_chars == 12_000
+        assert limits.truncate_head == 3000
+        assert limits.truncate_tail == 1000
 
     def test_custom_limits(self) -> None:
         limits = ResourceLimits(
