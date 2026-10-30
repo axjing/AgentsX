@@ -11,10 +11,15 @@ Usage::
         compacted = manager.compact(messages)
 """
 
+from typing import TYPE_CHECKING
+
 from agentsx.context.compaction import compact_messages, should_compact
 from agentsx.context.summarizer import ContextSummarizer, SummaryResult
 from agentsx.context.trajectory import Trajectory
 from agentsx.protocol.messages import AgentMessage
+
+if TYPE_CHECKING:
+    from agentsx.provider import Provider
 
 
 class ContextManager:
@@ -48,8 +53,28 @@ class ContextManager:
         )
 
     def compact(self, messages: list[AgentMessage]) -> list[AgentMessage]:
-        """Compact messages with summarization."""
+        """Compact messages with rule-based summarization."""
         summary_result = self._summarizer.summarize(messages)
+        if summary_result.removed_count > 0:
+            compacted = compact_messages(messages)
+            return self._summarizer.inject_summary(
+                compacted,
+                summary_result.summary,
+            )
+        return messages
+
+    async def compact_with_provider(
+        self,
+        messages: list[AgentMessage],
+        provider: "Provider",
+        timeout: float = 20.0,
+    ) -> list[AgentMessage]:
+        """Compact messages using LLM semantic summarization."""
+        summary_result = await self._summarizer.summarize_with_provider(
+            messages,
+            provider,
+            timeout=timeout,
+        )
         if summary_result.removed_count > 0:
             compacted = compact_messages(messages)
             return self._summarizer.inject_summary(
@@ -60,3 +85,16 @@ class ContextManager:
 
     def summarize(self, messages: list[AgentMessage]) -> SummaryResult:
         return self._summarizer.summarize(messages)
+
+    async def summarize_with_provider(
+        self,
+        messages: list[AgentMessage],
+        provider: "Provider",
+        timeout: float = 20.0,
+    ) -> SummaryResult:
+        """Create a semantic summary using an LLM provider."""
+        return await self._summarizer.summarize_with_provider(
+            messages,
+            provider,
+            timeout=timeout,
+        )

@@ -31,6 +31,7 @@ _SUMMARY_END_MARKER = (
     "--- END OF CONTEXT SUMMARY — "
     "respond to the message below, not the summary above ---"
 )
+SUMMARY_END_MARKER = _SUMMARY_END_MARKER
 
 # Structured summary template for LLM-generated summaries.
 _STRUCTURED_SUMMARY_TEMPLATE = """[CONTEXT COMPACTION — REFERENCE ONLY]

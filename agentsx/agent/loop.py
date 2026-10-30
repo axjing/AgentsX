@@ -30,7 +30,13 @@ from collections.abc import AsyncIterator
 from typing import TypeAlias
 
 from agentsx.config import AgentsXSettings, get_settings
-from agentsx.context.compaction import compact_messages_with_pruning, should_compact
+from agentsx.context.compaction import (
+    SUMMARY_END_MARKER,
+    compact_messages_with_pruning,
+    should_compact,
+)
+from agentsx.context.summarizer import ContextSummarizer
+from agentsx.context.tool_pruner import prune_messages_for_compaction
 from agentsx.extensions.api import (
     EVENT_ON_ERROR,
     EVENT_ON_LOOP_END,
@@ -103,8 +109,12 @@ async def _compact_context(
     compact: bool,
     compact_max_tokens: int,
     compact_max_messages: int,
+    provider: Provider | None = None,
 ) -> AsyncIterator[CompactionEvent]:
     """Perform context compaction if thresholds are exceeded.
+
+    Uses LLM semantic summarization if provider is available,
+    falling back to rule-based structured compaction on failure.
 
     Yields a ``CompactionEvent`` when compaction actually occurs.
     The caller is responsible for clearing and extending *messages*
@@ -118,7 +128,38 @@ async def _compact_context(
         return
 
     old_count = len(messages)
-    compacted = compact_messages_with_pruning(messages)
+    compacted: list[AgentMessage] = []
+
+    if provider is not None:
+        try:
+            # Phase 1: Prune verbose tool outputs in older messages
+            pruned = prune_messages_for_compaction(messages)
+            # Phase 2: Attempt LLM semantic summarization
+            summarizer = ContextSummarizer(max_recent=10)
+            summary_res = await summarizer.summarize_with_provider(
+                pruned,
+                provider,
+                timeout=15.0,
+            )
+            if summary_res.removed_count > 0 and summary_res.summary:
+                header = (
+                    f"[CONTEXT COMPACTION — {summary_res.removed_count} "
+                    f"earlier messages compacted]\n"
+                    f"{summary_res.summary}\n\n"
+                    f"{SUMMARY_END_MARKER}"
+                )
+                compacted = summarizer.inject_summary(pruned, header)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "LLM context summarization failed, falling back to rule-based: %s",
+                exc,
+            )
+            compacted = []
+
+    # Fallback to rule-based pruning & structured compaction
+    if not compacted or len(compacted) >= old_count:
+        compacted = compact_messages_with_pruning(messages)
+
     if len(compacted) < old_count:
         messages.clear()
         messages.extend(compacted)
@@ -295,6 +336,7 @@ async def run_agent_loop(
             compact=compact,
             compact_max_tokens=compact_max_tokens,
             compact_max_messages=compact_max_messages,
+            provider=provider,
         ):
             yield compaction_event
 
@@ -347,6 +389,7 @@ async def run_agent_loop(
                     compact=compact,
                     compact_max_tokens=compact_max_tokens,
                     compact_max_messages=compact_max_messages,
+                    provider=provider,
                 ):
                     yield compaction_event
                 # Retry the step once after compaction

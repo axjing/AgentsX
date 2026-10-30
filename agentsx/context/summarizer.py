@@ -11,6 +11,7 @@ Design:
 Inspired by Pi branch-summarization and hermes context_compressor.
 """
 
+import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -91,6 +92,7 @@ class ContextSummarizer:
         self,
         messages: list[AgentMessage],
         provider: "Provider",
+        timeout: float = 20.0,
     ) -> SummaryResult:
         """Create a semantic summary of older messages using an LLM provider.
 
@@ -100,6 +102,7 @@ class ContextSummarizer:
         Args:
             messages: Full conversation history.
             provider: LLM provider instance to generate the summary.
+            timeout: Maximum seconds to wait for provider stream completion.
 
         Returns:
             SummaryResult with semantic summary text and message counts.
@@ -144,11 +147,15 @@ class ContextSummarizer:
 
         try:
             summary_msg = AgentMessage(role=MessageRole.USER, content=prompt)
-            summary_parts: list[str] = []
-            async for event in provider.stream([summary_msg]):
-                if isinstance(event, TextStreamEvent):
-                    summary_parts.append(event.text)
-            summary = "".join(summary_parts).strip()
+
+            async def _collect() -> str:
+                parts: list[str] = []
+                async for event in provider.stream([summary_msg]):
+                    if isinstance(event, TextStreamEvent):
+                        parts.append(event.text)
+                return "".join(parts).strip()
+
+            summary = await asyncio.wait_for(_collect(), timeout=timeout)
             if not summary:
                 summary = self._build_summary(to_summarize)
         except Exception:  # noqa: BLE001

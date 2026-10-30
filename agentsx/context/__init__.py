@@ -5,6 +5,7 @@ LLM-driven summarization, and task planning.
 """
 
 from agentsx.context.compaction import (
+    SUMMARY_END_MARKER,
     compact_messages,
     compact_messages_with_pruning,
     estimate_message_tokens,
@@ -21,6 +22,7 @@ from agentsx.context.tool_pruner import (
 from agentsx.context.trajectory import Trajectory, TrajectoryEntry
 
 __all__ = [
+    "SUMMARY_END_MARKER",
     "compact_messages",
     "compact_messages_with_pruning",
     "estimate_message_tokens",
