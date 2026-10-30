@@ -4,6 +4,8 @@ import html
 import re
 import urllib.parse
 
+import httpx
+
 from agentsx.config import settings
 from agentsx.tools import tool
 
@@ -46,8 +48,6 @@ def tool_web_fetch(url: str, format: str = "text") -> str:  # noqa: A002
     Returns:
         The page content in the requested format.
     """
-    import httpx  # noqa: PLC0415
-
     try:
         response = httpx.get(
             url,
@@ -83,8 +83,6 @@ def tool_web_search(query: str, num_results: int = 5) -> str:
     Returns:
         Search results with title and URL.
     """
-    import httpx  # noqa: PLC0415
-
     num_results = min(num_results, 10)
     encoded = urllib.parse.quote(query)
     url = f"{settings.web_search_url}?q={encoded}"
