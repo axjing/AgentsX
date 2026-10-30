@@ -5,7 +5,7 @@ Tools are organized by risk level:
     - write/: Filesystem mutation tools
     - exec/: Shell command execution
     - web/: Network fetch/search tools
-    - orchestration/: Sub-agent spawning and task planning
+    - orchestration/: Sub-agent spawning, task planning, and memory
     - mcp/: External MCP server tool calls
 
 All tools are exposed via the ``ALL_TOOLS`` constant for easy registration::
@@ -16,6 +16,7 @@ All tools are exposed via the ``ALL_TOOLS`` constant for easy registration::
 
 from agentsx.tools.builtin.exec.shell import tool_bash
 from agentsx.tools.builtin.mcp.mcp_client import tool_mcp_call
+from agentsx.tools.builtin.orchestration.memory import tool_remember
 from agentsx.tools.builtin.orchestration.planner import tool_plan
 from agentsx.tools.builtin.orchestration.subagent import spawn_agent
 from agentsx.tools.builtin.read.filesystem import (
@@ -40,6 +41,7 @@ ALL_TOOLS = [
     tool_web_search,
     spawn_agent,
     tool_plan,
+    tool_remember,
     tool_mcp_call,
 ]
 
@@ -53,6 +55,7 @@ __all__ = [
     "tool_bash",
     "spawn_agent",
     "tool_plan",
+    "tool_remember",
     "tool_web_fetch",
     "tool_web_search",
     "tool_mcp_call",

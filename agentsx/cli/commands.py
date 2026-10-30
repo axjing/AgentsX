@@ -6,9 +6,13 @@ All session-management commands are defined here and dispatched from
 tuple so the caller can update its state.
 """
 
+import shutil
+import subprocess
+from pathlib import Path
+
 from agentsx.context.compaction import compact_messages, should_compact
 from agentsx.protocol.errors import SessionError
-from agentsx.protocol.messages import AgentMessage
+from agentsx.protocol.messages import AgentMessage, MessageRole
 from agentsx.session.protocol import SessionBackend
 
 
@@ -193,6 +197,116 @@ def cmd_title(
     return f"Session renamed to '{title}'", current_id
 
 
+def cmd_verify(project_dir: Path | None = None) -> str:
+    """Run project test verification suite.
+
+    Detects common test suites (pytest, npm test, cargo test, go test)
+    in the project directory and executes them.
+
+    Args:
+        project_dir: Root directory of the project. Defaults to current directory.
+
+    Returns:
+        Verification summary string with exit status and test output excerpt.
+    """
+    root = project_dir or Path.cwd()
+
+    if (root / "pyproject.toml").is_file() or (root / "pytest.ini").is_file():
+        runner_name = "pytest"
+        cmd = "uv run pytest -q" if shutil.which("uv") else "pytest -q"
+    elif (root / "package.json").is_file():
+        runner_name = "npm test"
+        cmd = "npm test"
+    elif (root / "Cargo.toml").is_file():
+        runner_name = "cargo test"
+        cmd = "cargo test"
+    elif (root / "go.mod").is_file():
+        runner_name = "go test"
+        cmd = "go test ./..."
+    else:
+        return (
+            "No known test suite detected (checked for pyproject.toml, "
+            "package.json, Cargo.toml, go.mod)."
+        )
+
+    try:
+        proc = subprocess.run(
+            cmd,
+            shell=True,
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        output = (proc.stdout + "\n" + proc.stderr).strip()
+        if len(output) > 2000:
+            output = output[:500] + "\n...[truncated]...\n" + output[-1500:]
+
+        status = (
+            "PASSED" if proc.returncode == 0 else f"FAILED (exit {proc.returncode})"
+        )
+        return f"[{runner_name} verification: {status}]\n{output}"
+    except subprocess.TimeoutExpired:
+        return f"[{runner_name} verification: TIMEOUT after 60s]"
+    except (subprocess.SubprocessError, OSError) as exc:
+        return f"[{runner_name} verification error: {exc}]"
+
+
+def cmd_revert(
+    store: SessionBackend,
+    current_id: str,
+    messages: list[AgentMessage],
+    reason: str = "",
+) -> tuple[str, str | None]:
+    """Revert the latest turn and branch to a clean context.
+
+    Finds the start of the latest user turn, trims in-memory messages,
+    and forks a new branch in the session store to isolate failed history.
+
+    Args:
+        store: SessionBackend instance.
+        current_id: Current session ID.
+        messages: In-memory conversation messages (modified in-place).
+        reason: Optional reason for the revert.
+
+    Returns:
+        (status_message, new_session_id or None).
+    """
+    if not messages:
+        return "No messages to revert.", None
+
+    last_user_idx: int | None = None
+    for idx in range(len(messages) - 1, -1, -1):
+        if messages[idx].role == MessageRole.USER:
+            last_user_idx = idx
+            break
+
+    if last_user_idx is None:
+        return "No user turn found to revert.", None
+
+    target_idx = last_user_idx
+
+    try:
+        branch = store.branch(
+            current_id,
+            title=f"Revert: {reason}" if reason else "Reverted Branch",
+            from_message_index=target_idx,
+            reason="revert",
+        )
+        new_id = branch.id
+    except SessionError as exc:
+        return f"Error branching session: {exc}", None
+
+    del messages[target_idx:]
+
+    desc = f" (reason: {reason})" if reason else ""
+    return (
+        f"Reverted to turn before message #{target_idx}{desc}. "
+        f"Branched to {new_id[:12]}.",
+        new_id,
+    )
+
+
 def cmd_help() -> str:
     """Return available commands help text."""
     return (
@@ -205,6 +319,8 @@ def cmd_help() -> str:
         "  /branch <id> [title]      Branch from a session\n"
         "  /title <name>             Rename current session\n"
         "  /compact [force]          Manually compact context\n"
+        "  /verify                   Run test verification suite\n"
+        "  /revert [reason]          Rollback failed turn & branch\n"
         "  /clear                    Clear conversation history\n"
         "  /help                     Show this message\n"
         "  /exit, /quit              Exit the chat"

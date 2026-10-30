@@ -12,6 +12,7 @@ compaction entry recording and replaces in-memory messages.
 import logging
 from collections import deque
 from collections.abc import AsyncIterator, Callable
+from pathlib import Path
 
 from agentsx.agent.loop import run_agent_loop
 from agentsx.context.compaction import compact_messages, should_compact
@@ -86,10 +87,41 @@ class AgentHarness:
         self._follow_up_queue: deque[str] = deque()
         self._steer_queue: deque[str] = deque()
 
-        if system_prompt:
+        effective_system_prompt = system_prompt or ""
+        memory_content = self._load_persistent_memory()
+        if memory_content:
+            if effective_system_prompt:
+                effective_system_prompt += f"\n\n{memory_content}"
+            else:
+                effective_system_prompt = memory_content
+
+        if effective_system_prompt:
             self._messages.append(
-                AgentMessage(role=MessageRole.SYSTEM, content=system_prompt),
+                AgentMessage(role=MessageRole.SYSTEM, content=effective_system_prompt),
             )
+
+    @staticmethod
+    def _load_persistent_memory() -> str:
+        """Load persistent guidelines from project and global memory.md."""
+        candidates = [
+            (Path.cwd() / ".agentsx" / "memory.md", "Project Memory & Learned Rules"),
+            (Path.home() / ".agentsx" / "memory.md", "Global Learned Rules"),
+        ]
+        snippets: list[str] = []
+        seen_files: set[Path] = set()
+        for p, title in candidates:
+            try:
+                resolved = p.resolve()
+                if resolved in seen_files:
+                    continue
+                seen_files.add(resolved)
+                if p.is_file():
+                    text = p.read_text(encoding="utf-8").strip()
+                    if text:
+                        snippets.append(f"## {title}:\n{text}")
+            except OSError:
+                continue
+        return "\n\n".join(snippets)
 
     # -- Properties --
 

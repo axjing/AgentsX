@@ -44,7 +44,11 @@ class AgentsXSettings(BaseSettings):
     max_steps: int = Field(default=25, ge=1, le=200)
     """Maximum tool-calling iterations per conversation."""
 
-    system_prompt: str = "You are a helpful AI assistant."
+    system_prompt: str = (
+        "You are a helpful AI assistant. Whenever you write or modify code, "
+        "actively verify your changes using appropriate test commands before "
+        "declaring completion."
+    )
     """Default system prompt."""
 
     # ── Session ──

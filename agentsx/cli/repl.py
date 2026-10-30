@@ -70,10 +70,21 @@ def handle_command(
         console.print("[dim]History cleared.[/dim]")
         return None, model_name
 
+    if command == "/verify":
+        msg = commands.cmd_verify()
+        console.print(msg)
+        return None, model_name
+
     # ── Session commands ─────────────────────────────────────────────
     if store is None:
         console.print("[yellow]Session store not available.[/yellow]")
         return None, model_name
+
+    if command in ("/revert", "/rollback"):
+        reason = " ".join(parts[1:]) if len(parts) > 1 else ""
+        msg, new_id = commands.cmd_revert(store, session_id, messages, reason=reason)
+        console.print(msg)
+        return new_id, model_name
 
     if command == "/sessions":
         msg, _ = commands.cmd_sessions(store, session_id)
