@@ -185,7 +185,7 @@ AgentsX 是一个轻量级 AI Agent 运行时框架（Agent Harness），以 **R
 | `exec` | 高危 | `tool_bash`（`asyncio.create_subprocess_shell`，可超时 kill） | PROMPT |
 | `web` | 只读 | `tool_web_fetch` / `tool_web_search`（DuckDuckGo HTML 抓取，无三方依赖） | ALLOW |
 | `orchestration` | 委派 | `spawn_agent`（经全局 `Orchestrator` 单例，深度/并发受限） | — |
-| `mcp`（无 toolset） | 外部 | `tool_mcp_call`（MCP over stdio，JSON-RPC 2.0） | — |
+| `mcp` | 外部 | `tool_mcp_call`（MCP over stdio，JSON-RPC 2.0，异步支持） | PROMPT |
 
 `ALL_TOOLS`（`tools/builtin/__init__.py:31`）导出全部 10 个工具。
 
@@ -369,11 +369,11 @@ AgentsX 是一个轻量级 AI Agent 运行时框架（Agent Harness），以 **R
 
 以下为文档与实现不一致或待落地的点，供后续工作参考：
 
-1. **PathGuard / CommandGuard 未接入工具执行链**：目前仅 ExecutionPolicy + allowed_dirs + 输出截断在运行时生效；`tool_bash` 未先过 CommandGuard。
-2. **`AGENTSX_POLICY_DEFAULT` 未生效**：`ExecutionPolicy` 构造未读取该配置。
+1. **PathGuard / CommandGuard 已接入 ExecutionPolicy**：`tool_bash` 与 `tool_mcp_call` 先过 CommandGuard 判定高危命令。
+2. **`AGENTSX_POLICY_DEFAULT` 已生效**：`ExecutionPolicy.default()` 读取该配置决定默认决策。
 3. **`ContextSummarizer` 是统计式而非 LLM 摘要**：docstring 与 `max_summary_tokens` 存在偏差；运行时压缩路径（loop/harness）并不经过 `ContextManager`/`ContextSummarizer`。
-4. **`tool_mcp_call` 为同步阻塞**、无 toolset、无超时；其余工具均异步。
-5. **grep 剪枝错配**：`ToolPruner` 期望 `tool_file_grep` 输出含 JSON `total_count`，而实际 grep 工具输出为纯文本。
+4. **`tool_mcp_call` 已全面异步化**：具备 `mcp` toolset、可配超时控制，安全受 CommandGuard 约束。
+5. **grep 剪枝适配**：`ToolPruner` 已适配纯文本 grep 格式解析。
 6. **AnthropicProvider 的 `headers` 混入 `build_kwargs`**（`anthropic.py:86`），Transport 边界略被突破。
 7. **DeepSeek `max_tokens` 特判**（`generic.py:122-123`）为 Provider 特例硬编码。
 8. **`agentsx/security.py` 与 `core/__init__.py` 为向后兼容 shim**（弃用告警），依赖解析优先包。

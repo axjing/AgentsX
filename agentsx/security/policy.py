@@ -95,9 +95,14 @@ class ExecutionPolicy:
             if not self._check_path_allowed(tool_name, tool_args or {}):
                 return Decision.FORBIDDEN
 
-        # 1.5 Command guard for shell execution
-        if tool_name == "tool_bash":
-            cmd = str((tool_args or {}).get("command", ""))
+        # 1.5 Command guard for shell/subprocess execution
+        if tool_name in ("tool_bash", "tool_mcp_call"):
+            cmd = str(
+                (tool_args or {}).get(
+                    "command" if tool_name == "tool_bash" else "server_command",
+                    "",
+                )
+            )
             if cmd:
                 cmd_check = self._command_guard.check(cmd)
                 if cmd_check.level in (
@@ -169,6 +174,7 @@ class ExecutionPolicy:
                 Rule("tool_file_write:*", Decision.PROMPT),
                 Rule("tool_file_edit:*", Decision.PROMPT),
                 Rule("tool_bash:*", Decision.PROMPT),
+                Rule("tool_mcp_call:*", Decision.PROMPT),
             ],
             default_decision=default_decision,
             allowed_dirs=allowed_dirs,

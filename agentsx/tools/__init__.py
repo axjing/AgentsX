@@ -45,6 +45,9 @@ TOOLSET_ORCHESTRATION = "orchestration"
 TOOLSET_VISION = "vision"
 """Image analysis tools."""
 
+TOOLSET_MCP = "mcp"
+"""External MCP server tool calls."""
+
 ALL_TOOLSETS = frozenset(
     {
         TOOLSET_READ,
@@ -53,6 +56,7 @@ ALL_TOOLSETS = frozenset(
         TOOLSET_WEB,
         TOOLSET_ORCHESTRATION,
         TOOLSET_VISION,
+        TOOLSET_MCP,
     }
 )
 
