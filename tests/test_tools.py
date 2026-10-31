@@ -11,7 +11,10 @@ from agentsx.tools.builtin.read.filesystem import (
     tool_file_glob,
     tool_file_read,
 )
-from agentsx.tools.builtin.write.filesystem import tool_file_write
+from agentsx.tools.builtin.write.filesystem import (
+    tool_file_edit,
+    tool_file_write,
+)
 
 # ── ToolSpec ─────────────────────────────────────────────────────────
 
@@ -251,6 +254,57 @@ class TestToolFileWrite:
             )
             assert "Wrote" in result.content
             assert path.read_text() == "new content"
+
+
+class TestToolFileEdit:
+    """Edit tool with unified diff feedback."""
+
+    @pytest.mark.asyncio
+    async def test_edit_file_success(self, tmp_path: Path) -> None:
+        target = tmp_path / "hello.py"
+        target.write_text("def hello():\n    print('hi')\n")
+        res = await tool_file_edit.call(
+            path=str(target),
+            old_string="print('hi')",
+            new_string="print('hello world')",
+        )
+        assert not res.is_error
+        assert "Edited" in res.content
+        assert "```diff" in res.content
+        assert "-    print('hi')" in res.content
+        assert "+    print('hello world')" in res.content
+        assert target.read_text() == "def hello():\n    print('hello world')\n"
+
+    @pytest.mark.asyncio
+    async def test_edit_file_not_found(self, tmp_path: Path) -> None:
+        res = await tool_file_edit.call(
+            path=str(tmp_path / "missing.py"),
+            old_string="a",
+            new_string="b",
+        )
+        assert "Error: file not found" in res.content
+
+    @pytest.mark.asyncio
+    async def test_edit_old_string_not_found(self, tmp_path: Path) -> None:
+        target = tmp_path / "app.py"
+        target.write_text("x = 1\n")
+        res = await tool_file_edit.call(
+            path=str(target),
+            old_string="y = 2",
+            new_string="y = 3",
+        )
+        assert "Error: old_string not found" in res.content
+
+    @pytest.mark.asyncio
+    async def test_edit_identical_string(self, tmp_path: Path) -> None:
+        target = tmp_path / "app.py"
+        target.write_text("x = 1\n")
+        res = await tool_file_edit.call(
+            path=str(target),
+            old_string="x = 1",
+            new_string="x = 1",
+        )
+        assert "identical" in res.content
 
 
 class TestToolFileGlob:
