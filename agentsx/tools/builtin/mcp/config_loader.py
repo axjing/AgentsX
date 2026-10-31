@@ -68,9 +68,7 @@ def load_mcp_configs(
                 if not command or not isinstance(command, str):
                     continue
                 args = s_cfg.get("args")
-                arg_list = (
-                    [str(a) for a in args] if isinstance(args, list) else None
-                )
+                arg_list = [str(a) for a in args] if isinstance(args, list) else None
                 env = s_cfg.get("env")
                 env_dict = (
                     {str(k): str(v) for k, v in env.items()}

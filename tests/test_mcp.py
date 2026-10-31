@@ -426,4 +426,3 @@ class TestMCPRegistration:
                 "fetch_data",
                 {"query": "SELECT 1"},
             )
-
