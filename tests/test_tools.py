@@ -7,8 +7,10 @@ import pytest
 
 from agentsx.tools import ToolRegistry, ToolSpec, tool
 from agentsx.tools.builtin import ALL_TOOLS
+from agentsx.tools.builtin.exec.shell import tool_bash
 from agentsx.tools.builtin.read.filesystem import (
     tool_file_glob,
+    tool_file_grep,
     tool_file_read,
 )
 from agentsx.tools.builtin.write.filesystem import (
@@ -159,19 +161,20 @@ class TestToolDecorator:
         @tool()
         def hello(name: str) -> str:
             """Say hello."""
-            return f"Hello {name}"
+            return f"Hello, {name}!"
 
         assert isinstance(hello, ToolSpec)
         assert hello.name == "hello"
         assert hello.description == "Say hello."
+        assert "name" in hello.parameters["properties"]  # type: ignore[operator]
 
-    def test_decorator_with_args(self) -> None:
-        @tool(name="my_greet", description="A greeting")
-        def greet(name: str) -> str:
-            return f"Hi {name}"
+    def test_decorator_with_name_override(self) -> None:
+        @tool(name="custom_greet", description="Custom greeting")
+        def greet() -> str:
+            return "hi"
 
-        assert greet.name == "my_greet"
-        assert greet.description == "A greeting"
+        assert greet.name == "custom_greet"
+        assert greet.description == "Custom greeting"
 
     @pytest.mark.asyncio
     async def test_decorator_callable(self) -> None:
@@ -192,7 +195,7 @@ class TestToolDecorator:
         assert conditional.check_fn() is False
 
 
-# ── Built-in: Filesystem ─────────────────────────────────────────────
+# ── Built-in Tools ───────────────────────────────────────────────────
 
 
 class TestToolFileRead:
@@ -227,6 +230,15 @@ class TestToolFileRead:
             assert lines[0].startswith("3: c")
         finally:
             Path(tmp).unlink(missing_ok=True)
+
+    @pytest.mark.asyncio
+    async def test_read_non_utf8_bytes(self, tmp_path: Path) -> None:
+        target = tmp_path / "bad.txt"
+        target.write_bytes(b"hello \xff\xfe world\n")
+        result = await tool_file_read.call(path=str(target))
+        assert not result.is_error
+        assert "hello" in result.content
+        assert "world" in result.content
 
 
 class TestToolFileWrite:
@@ -314,6 +326,70 @@ class TestToolFileGlob:
     async def test_glob_py_files(self) -> None:
         result = await tool_file_glob.call(pattern="*.py", root="agentsx")
         assert result.content == "" or "agentsx" in result.content
+
+
+class TestToolFileGrep:
+    """Grep tool."""
+
+    @pytest.mark.asyncio
+    async def test_grep_basic_match(self, tmp_path: Path) -> None:
+        (tmp_path / "code.py").write_text("def find_me():\n    pass\n")
+        res = await tool_file_grep.call(pattern="find_me", root=str(tmp_path))
+        assert not res.is_error
+        assert "code.py:1:def find_me():" in res.content
+
+    @pytest.mark.asyncio
+    async def test_grep_skips_ignored_dirs(self, tmp_path: Path) -> None:
+        venv_dir = tmp_path / ".venv" / "sub"
+        venv_dir.mkdir(parents=True)
+        (venv_dir / "hidden.py").write_text("TARGET_PHRASE\n")
+
+        src_dir = tmp_path / "src"
+        src_dir.mkdir(parents=True)
+        (src_dir / "visible.py").write_text("TARGET_PHRASE\n")
+
+        res = await tool_file_grep.call(pattern="TARGET_PHRASE", root=str(tmp_path))
+        assert not res.is_error
+        assert "visible.py" in res.content
+        assert ".venv" not in res.content
+
+    @pytest.mark.asyncio
+    async def test_grep_not_a_directory(self, tmp_path: Path) -> None:
+        file_path = tmp_path / "file.txt"
+        file_path.write_text("content")
+        res = await tool_file_grep.call(pattern="test", root=str(file_path))
+        assert "Error: not a directory" in res.content
+
+    @pytest.mark.asyncio
+    async def test_grep_invalid_regex(self, tmp_path: Path) -> None:
+        res = await tool_file_grep.call(pattern="[unclosed", root=str(tmp_path))
+        assert "Error: invalid regex" in res.content
+
+
+class TestToolBash:
+    """Bash shell execution tool."""
+
+    @pytest.mark.asyncio
+    async def test_bash_echo(self) -> None:
+        res = await tool_bash.call(command="python -c \"print('bash_success')\"")
+        assert not res.is_error
+        assert "bash_success" in res.content
+        assert "Exit code: 0" in res.content
+
+    @pytest.mark.asyncio
+    async def test_bash_cwd_valid(self, tmp_path: Path) -> None:
+        sub = tmp_path / "subfolder"
+        sub.mkdir()
+        (sub / "marker.txt").write_text("marker_present")
+        cmd = "python -c \"import os; print(os.listdir('.'))\""
+        res = await tool_bash.call(command=cmd, cwd=str(sub))
+        assert not res.is_error
+        assert "marker.txt" in res.content
+
+    @pytest.mark.asyncio
+    async def test_bash_cwd_invalid(self) -> None:
+        res = await tool_bash.call(command="echo 1", cwd="/nonexistent_dir_12345")
+        assert "Error: directory not found" in res.content
 
 
 # ── Built-in: ALL_TOOLS ──────────────────────────────────────────────

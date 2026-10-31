@@ -7,6 +7,18 @@ from pathlib import Path
 
 from agentsx.tools import tool
 
+IGNORED_GREP_DIRS = {
+    ".git",
+    ".venv",
+    "venv",
+    "node_modules",
+    "__pycache__",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".mypy_cache",
+    ".tox",
+}
+
 
 @tool(description="Read a file from the local filesystem.", toolset="read")
 def tool_file_read(path: str, offset: int = 0, limit: int = 0) -> str:
@@ -26,7 +38,7 @@ def tool_file_read(path: str, offset: int = 0, limit: int = 0) -> str:
     if not filepath.is_file():
         return f"Error: not a file: {path}"
 
-    lines = filepath.read_text(encoding="utf-8").splitlines()
+    lines = filepath.read_text(encoding="utf-8", errors="replace").splitlines()
     if offset > 0:
         lines = lines[offset - 1 :]
     if limit > 0:
@@ -59,19 +71,25 @@ def tool_file_grep(
         return f"Error: invalid regex: {exc}"
     matches: list[str] = []
     total = 0
-    for filepath in root_path.rglob("*"):
-        if not filepath.is_file():
-            continue
-        if not fnmatch.fnmatch(filepath.name, include):
-            continue
-        text = filepath.read_text(encoding="utf-8", errors="replace")
-        for lineno, line in enumerate(text.splitlines(), start=1):
-            if regex.search(line):
-                rel = os.path.relpath(filepath, root)
-                matches.append(f"{rel}:{lineno}:{line}")
-                total += 1
-                if total >= 500:
-                    break
+    for dirpath, dirnames, filenames in os.walk(root_path):
+        dirnames[:] = [d for d in dirnames if d not in IGNORED_GREP_DIRS]
+        for filename in filenames:
+            if not fnmatch.fnmatch(filename, include):
+                continue
+            filepath = Path(dirpath) / filename
+            try:
+                text = filepath.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            for lineno, line in enumerate(text.splitlines(), start=1):
+                if regex.search(line):
+                    rel = os.path.relpath(filepath, root)
+                    matches.append(f"{rel}:{lineno}:{line}")
+                    total += 1
+                    if total >= 500:
+                        break
+            if total >= 500:
+                break
         if total >= 500:
             break
     if not matches:

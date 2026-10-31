@@ -34,14 +34,28 @@ class GitWatcher:
             return GitStatus(error="Not a git repository")
 
         try:
-            branch = self._run_git("rev-parse", "--abbrev-ref", "HEAD")
-            modified = self._run_git("diff", "--name-only").strip().splitlines()
-            untracked = self._run_git("ls-files", "--others", "--exclude-standard")
-            untracked_count = len(untracked) if untracked else 0
+            branch = self._run_git("rev-parse", "--abbrev-ref", "HEAD").strip()
+            unstaged = self._run_git("diff", "--name-only").strip().splitlines()
+            staged = (
+                self._run_git("diff", "--cached", "--name-only").strip().splitlines()
+            )
+            seen: set[str] = set()
+            modified: list[str] = []
+            for file_path in unstaged + staged:
+                cleaned = file_path.strip()
+                if cleaned and cleaned not in seen:
+                    seen.add(cleaned)
+                    modified.append(cleaned)
+
+            untracked_raw = self._run_git(
+                "ls-files", "--others", "--exclude-standard"
+            ).strip()
+            untracked_files = [f for f in untracked_raw.splitlines() if f.strip()]
+            untracked_count = len(untracked_files)
 
             return GitStatus(
                 branch=branch,
-                modified_files=modified if modified else [],
+                modified_files=modified,
                 untracked_count=untracked_count,
                 is_dirty=bool(modified) or untracked_count > 0,
             )

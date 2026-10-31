@@ -2,6 +2,7 @@
 
 import asyncio
 import subprocess
+from pathlib import Path
 
 from agentsx.config import get_settings
 from agentsx.tools import tool
@@ -10,6 +11,7 @@ from agentsx.tools import tool
 async def _run_command(
     command: str,
     timeout: int,
+    cwd: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Run a shell command without blocking the event loop.
 
@@ -20,6 +22,7 @@ async def _run_command(
         command,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
+        cwd=cwd,
     )
     try:
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
@@ -48,6 +51,7 @@ async def tool_bash(
     command: str,
     description: str = "",
     timeout: int = 120,
+    cwd: str = "",
 ) -> str:
     """Run a shell command.
 
@@ -55,15 +59,21 @@ async def tool_bash(
         command: The command to execute.
         description: Brief description of what the command does.
         timeout: Timeout in seconds (default 120).
+        cwd: Optional directory to execute the command in.
 
     Returns:
         Combined stdout and stderr.
     """
+    if cwd:
+        cwd_path = Path(cwd)
+        if not cwd_path.is_dir():
+            return f"Error: directory not found: {cwd}"
+
     if timeout == 120:
         settings = get_settings()
         timeout = settings.tool_timeout
 
-    result = await _run_command(command, timeout)
+    result = await _run_command(command, timeout, cwd=cwd or None)
 
     output = result.stdout
     if result.stderr:
