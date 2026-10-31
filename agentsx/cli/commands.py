@@ -16,6 +16,7 @@ from agentsx.protocol.errors import SessionError
 from agentsx.protocol.messages import AgentMessage, MessageRole
 from agentsx.provider import create_provider
 from agentsx.session.protocol import SessionBackend
+from agentsx.workspace.git import GitWatcher
 
 
 def cmd_compact(
@@ -393,6 +394,63 @@ def cmd_model(current_model: str, new_model: str = "") -> tuple[str, str]:
     return f"Model switched to '{clean_target}'", clean_target
 
 
+def cmd_status(
+    session_id: str,
+    model_name: str,
+    messages: list[AgentMessage],
+    workspace_root: Path | None = None,
+) -> str:
+    """Return unified status summary of the session, model, context, and git workspace.
+
+    Args:
+        session_id: Current active session ID.
+        model_name: Current active model name.
+        messages: Active conversation messages list.
+        workspace_root: Workspace root directory. Defaults to current working directory.
+
+    Returns:
+        Formatted multi-line status summary.
+    """
+    root = workspace_root or Path.cwd()
+    msg_count = len(messages)
+    approx_tokens = sum(len(m.content) for m in messages) // 4
+
+    watcher = GitWatcher(root)
+    git_status = watcher.get_status()
+
+    if git_status.error:
+        git_info = f"Git        : {git_status.error}"
+    else:
+        dirty_flag = "dirty" if git_status.is_dirty else "clean"
+        mod_count = len(git_status.modified_files or [])
+        git_info = (
+            f"Git        : branch '{git_status.branch}' ({dirty_flag}, "
+            f"{mod_count} modified, {git_status.untracked_count} untracked)"
+        )
+
+    plan = get_active_plan()
+    if plan.tasks:
+        done = plan.completed_count
+        plan_info = f"Plan       : {done}/{plan.total_count} tasks completed"
+    else:
+        plan_info = "Plan       : no active plan"
+
+    sid_display = (
+        session_id[:12] + "..." if len(session_id) > 12 else (session_id or "none")
+    )
+
+    lines = [
+        "Session Status:",
+        f"  Session ID : {sid_display}",
+        f"  Model      : {model_name}",
+        f"  Context    : {msg_count} messages (~{approx_tokens} tokens)",
+        f"  Workspace  : {root}",
+        f"  {git_info}",
+        f"  {plan_info}",
+    ]
+    return "\n".join(lines)
+
+
 def cmd_help() -> str:
     """Return available commands help text."""
     return (
@@ -404,6 +462,7 @@ def cmd_help() -> str:
         "  /delete <id>              Delete a session\n"
         "  /branch <id> [title]      Branch from a session\n"
         "  /title <name>             Rename current session\n"
+        "  /status                   Show session, model & workspace status\n"
         "  /model [name]             Show or switch active model\n"
         "  /compact [force]          Manually compact context\n"
         "  /memory [show|clear]      View or clear persistent memory\n"

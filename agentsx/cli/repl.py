@@ -70,6 +70,15 @@ def handle_command(
         console.print("[dim]History cleared.[/dim]")
         return None, model_name
 
+    if command in ("/status", "/info"):
+        msg = commands.cmd_status(
+            session_id=session_id,
+            model_name=model_name,
+            messages=messages,
+        )
+        console.print(msg)
+        return None, model_name
+
     if command == "/verify":
         msg = commands.cmd_verify()
         console.print(msg)

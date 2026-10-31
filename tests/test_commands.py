@@ -16,9 +16,11 @@ from agentsx.cli.commands import (
     cmd_session_show,
     cmd_session_switch,
     cmd_sessions,
+    cmd_status,
     cmd_title,
 )
 from agentsx.context.plan import get_active_plan
+from agentsx.protocol.messages import AgentMessage, MessageRole
 from agentsx.session.store import SessionStore
 
 
@@ -209,12 +211,36 @@ class TestCmdModel:
             assert model == "gpt-4o"
 
 
+class TestCmdStatus:
+    """``/status`` — show session, model, context & workspace info."""
+
+    def test_status_output(self, tmp_path: Path) -> None:
+        messages = [
+            AgentMessage(role=MessageRole.SYSTEM, content="system prompt"),
+            AgentMessage(role=MessageRole.USER, content="hello world"),
+        ]
+        status_text = cmd_status(
+            session_id="abcdef1234567890",
+            model_name="gpt-4o",
+            messages=messages,
+            workspace_root=tmp_path,
+        )
+        assert "Session Status:" in status_text
+        assert "abcdef123456..." in status_text
+        assert "gpt-4o" in status_text
+        assert "2 messages" in status_text
+        assert str(tmp_path) in status_text
+        assert "Git" in status_text
+        assert "Plan" in status_text
+
+
 class TestCmdHelp:
     """``/help`` — show help."""
 
     def test_help(self) -> None:
         text = cmd_help()
         assert "/sessions" in text
+        assert "/status" in text
         assert "/model" in text
         assert "/memory" in text
         assert "/plan" in text
