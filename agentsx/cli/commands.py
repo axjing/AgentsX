@@ -11,6 +11,7 @@ import subprocess
 from pathlib import Path
 
 from agentsx.context.compaction import compact_messages, should_compact
+from agentsx.context.plan import get_active_plan
 from agentsx.protocol.errors import SessionError
 from agentsx.protocol.messages import AgentMessage, MessageRole
 from agentsx.session.protocol import SessionBackend
@@ -307,6 +308,64 @@ def cmd_revert(
     )
 
 
+def cmd_memory(action: str = "show") -> str:
+    """View or manage persistent learned memory.
+
+    Args:
+        action: Either ``"show"`` (default) or ``"clear"``.
+
+    Returns:
+        Formatted memory rules or confirmation message.
+    """
+    proj_mem = Path.cwd() / ".agentsx" / "memory.md"
+    glob_mem = Path.home() / ".agentsx" / "memory.md"
+
+    if action in ("clear", "reset"):
+        cleared: list[str] = []
+        if proj_mem.is_file():
+            proj_mem.write_text("", encoding="utf-8")
+            cleared.append(str(proj_mem))
+        if cleared:
+            return f"Cleared project memory ({', '.join(cleared)})."
+        return "No project memory file to clear."
+
+    snippets: list[str] = []
+    if proj_mem.is_file():
+        content = proj_mem.read_text(encoding="utf-8").strip()
+        if content:
+            snippets.append(f"## Project Memory ({proj_mem}):\n{content}")
+    if glob_mem.is_file():
+        content = glob_mem.read_text(encoding="utf-8").strip()
+        if content:
+            snippets.append(f"## Global Memory ({glob_mem}):\n{content}")
+
+    if not snippets:
+        return (
+            "No persistent memories recorded yet.\n"
+            "Use tool_remember to crystallize project rules or lessons."
+        )
+    return "\n\n".join(snippets)
+
+
+def cmd_plan(action: str = "view") -> str:
+    """View or clear the active multi-step task plan.
+
+    Args:
+        action: Either ``"view"`` (default) or ``"clear"``.
+
+    Returns:
+        Rendered markdown plan or confirmation message.
+    """
+    plan = get_active_plan()
+    if action in ("clear", "reset"):
+        plan.clear()
+        return "Active task plan cleared."
+
+    if not plan.tasks:
+        return "No active task plan. (Use tool_plan to create tasks)"
+    return plan.render_markdown()
+
+
 def cmd_help() -> str:
     """Return available commands help text."""
     return (
@@ -319,6 +378,8 @@ def cmd_help() -> str:
         "  /branch <id> [title]      Branch from a session\n"
         "  /title <name>             Rename current session\n"
         "  /compact [force]          Manually compact context\n"
+        "  /memory [show|clear]      View or clear persistent memory\n"
+        "  /plan [view|clear]        View or clear active task plan\n"
         "  /verify                   Run test verification suite\n"
         "  /revert [reason]          Rollback failed turn & branch\n"
         "  /clear                    Clear conversation history\n"

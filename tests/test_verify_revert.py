@@ -252,7 +252,27 @@ def test_repl_rollback_alias(sqlite_store: SQLiteSessionStore) -> None:
 
 
 def test_cmd_help_includes_rsi_commands() -> None:
-    """Test help string includes /verify and /revert."""
+    """Test help string includes /verify, /revert, /memory, and /plan."""
     help_text = cmd_help()
     assert "/verify" in help_text
     assert "/revert" in help_text
+    assert "/memory" in help_text
+    assert "/plan" in help_text
+
+
+def test_repl_memory_command() -> None:
+    """Test /memory slash command handled in REPL."""
+    with patch("agentsx.cli.commands.cmd_memory", return_value="Memory") as mock_m:
+        new_id, model = handle_command("/memory show", [])
+        mock_m.assert_called_once_with(action="show")
+        assert new_id is None
+        assert model == "unknown"
+
+
+def test_repl_plan_command() -> None:
+    """Test /plan slash command handled in REPL."""
+    with patch("agentsx.cli.commands.cmd_plan", return_value="Plan") as mock_p:
+        new_id, model = handle_command("/plan view", [])
+        mock_p.assert_called_once_with(action="view")
+        assert new_id is None
+        assert model == "unknown"

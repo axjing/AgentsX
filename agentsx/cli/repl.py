@@ -75,6 +75,18 @@ def handle_command(
         console.print(msg)
         return None, model_name
 
+    if command == "/memory":
+        action = parts[1].lower() if len(parts) > 1 else "show"
+        msg = commands.cmd_memory(action=action)
+        console.print(msg)
+        return None, model_name
+
+    if command == "/plan":
+        action = parts[1].lower() if len(parts) > 1 else "view"
+        msg = commands.cmd_plan(action=action)
+        console.print(msg)
+        return None, model_name
+
     # ── Session commands ─────────────────────────────────────────────
     if store is None:
         console.print("[yellow]Session store not available.[/yellow]")
