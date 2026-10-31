@@ -87,6 +87,12 @@ def handle_command(
         console.print(msg)
         return None, model_name
 
+    if command == "/model":
+        target = parts[1].strip() if len(parts) > 1 else ""
+        msg, new_model = commands.cmd_model(model_name, target)
+        console.print(msg)
+        return None, new_model
+
     # ── Session commands ─────────────────────────────────────────────
     if store is None:
         console.print("[yellow]Session store not available.[/yellow]")

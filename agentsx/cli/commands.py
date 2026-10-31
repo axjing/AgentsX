@@ -14,6 +14,7 @@ from agentsx.context.compaction import compact_messages, should_compact
 from agentsx.context.plan import get_active_plan
 from agentsx.protocol.errors import SessionError
 from agentsx.protocol.messages import AgentMessage, MessageRole
+from agentsx.provider import create_provider
 from agentsx.session.protocol import SessionBackend
 
 
@@ -366,6 +367,32 @@ def cmd_plan(action: str = "view") -> str:
     return plan.render_markdown()
 
 
+def cmd_model(current_model: str, new_model: str = "") -> tuple[str, str]:
+    """Display or switch the active LLM model.
+
+    Args:
+        current_model: The currently active model name.
+        new_model: Target model name to switch to (empty = view only).
+
+    Returns:
+        (status_message, updated_model_name).
+    """
+    clean_target = new_model.strip()
+    if not clean_target:
+        return f"Current model: {current_model}", current_model
+
+    try:
+        # Validate that a provider instance can be created
+        create_provider(clean_target)
+    except (ValueError, KeyError, RuntimeError, OSError) as exc:
+        return (
+            f"Error creating provider for '{clean_target}': {exc}",
+            current_model,
+        )
+
+    return f"Model switched to '{clean_target}'", clean_target
+
+
 def cmd_help() -> str:
     """Return available commands help text."""
     return (
@@ -377,6 +404,7 @@ def cmd_help() -> str:
         "  /delete <id>              Delete a session\n"
         "  /branch <id> [title]      Branch from a session\n"
         "  /title <name>             Rename current session\n"
+        "  /model [name]             Show or switch active model\n"
         "  /compact [force]          Manually compact context\n"
         "  /memory [show|clear]      View or clear persistent memory\n"
         "  /plan [view|clear]        View or clear active task plan\n"

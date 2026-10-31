@@ -115,3 +115,13 @@ async def test_harness_clear_history() -> None:
     harness.clear_history()
     assert len(harness.messages) == 1
     assert harness.messages[0].role == MessageRole.SYSTEM
+
+
+def test_harness_hot_swap_provider() -> None:
+    """Test hot-swapping provider via provider setter."""
+    p1 = _FakeProvider(["First"])
+    p2 = _FakeProvider(["Second"])
+    harness = AgentHarness(provider=p1)
+    assert harness.provider is p1
+    harness.provider = p2
+    assert harness.provider is p2

@@ -130,6 +130,11 @@ class AgentHarness:
         """The LLM provider for this harness."""
         return self._provider
 
+    @provider.setter
+    def provider(self, new_provider: Provider) -> None:
+        """Hot-swap the LLM provider for subsequent turns."""
+        self._provider = new_provider
+
     @property
     def messages(self) -> list[AgentMessage]:
         """Read-only copy of the current message history."""

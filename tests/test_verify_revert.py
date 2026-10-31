@@ -252,12 +252,13 @@ def test_repl_rollback_alias(sqlite_store: SQLiteSessionStore) -> None:
 
 
 def test_cmd_help_includes_rsi_commands() -> None:
-    """Test help string includes /verify, /revert, /memory, and /plan."""
+    """Test help string includes /verify, /revert, /memory, /plan, /model."""
     help_text = cmd_help()
     assert "/verify" in help_text
     assert "/revert" in help_text
     assert "/memory" in help_text
     assert "/plan" in help_text
+    assert "/model" in help_text
 
 
 def test_repl_memory_command() -> None:
@@ -276,3 +277,19 @@ def test_repl_plan_command() -> None:
         mock_p.assert_called_once_with(action="view")
         assert new_id is None
         assert model == "unknown"
+
+
+def test_repl_model_command() -> None:
+    """Test /model slash command handled in REPL."""
+    with patch(
+        "agentsx.cli.commands.cmd_model",
+        return_value=("Switched", "claude-3-5-sonnet"),
+    ) as mock_m:
+        new_id, model = handle_command(
+            "/model claude-3-5-sonnet",
+            [],
+            model_name="gpt-4o",
+        )
+        mock_m.assert_called_once_with("gpt-4o", "claude-3-5-sonnet")
+        assert new_id is None
+        assert model == "claude-3-5-sonnet"

@@ -387,8 +387,13 @@ async def _async_chat(
                 sess.id,
                 shown_model,
             )
-            if new_model:
-                shown_model = new_model
+            if new_model and new_model != shown_model:
+                try:
+                    harness.provider = create_provider(new_model)
+                    shown_model = new_model
+                    console.print(f"[dim]Provider switched to {shown_model}[/dim]")
+                except Exception as exc:  # noqa: BLE001
+                    console.print(f"[red]Failed to switch provider: {exc}[/red]")
             if new_id is not None and new_id != sess.id:
                 # Session switch: reload messages
                 sess = store.get(new_id)

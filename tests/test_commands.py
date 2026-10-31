@@ -1,6 +1,7 @@
 """Tests for CLI commands (``agentsx/cli/commands.py``)."""
 
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -9,6 +10,7 @@ from agentsx.cli.commands import (
     cmd_delete,
     cmd_help,
     cmd_memory,
+    cmd_model,
     cmd_new,
     cmd_plan,
     cmd_session_show,
@@ -183,12 +185,37 @@ class TestCmdPlan:
         assert not plan.tasks
 
 
+class TestCmdModel:
+    """``/model [name]`` — show or switch model."""
+
+    def test_model_show(self) -> None:
+        msg, model = cmd_model("gpt-4o")
+        assert "Current model: gpt-4o" in msg
+        assert model == "gpt-4o"
+
+    def test_model_switch_valid(self) -> None:
+        with patch("agentsx.cli.commands.create_provider"):
+            msg, model = cmd_model("gpt-4o", "claude-3-5-sonnet")
+            assert "Model switched to 'claude-3-5-sonnet'" in msg
+            assert model == "claude-3-5-sonnet"
+
+    def test_model_switch_invalid(self) -> None:
+        with patch(
+            "agentsx.cli.commands.create_provider",
+            side_effect=ValueError("Bad provider"),
+        ):
+            msg, model = cmd_model("gpt-4o", "invalid-model")
+            assert "Error creating provider" in msg
+            assert model == "gpt-4o"
+
+
 class TestCmdHelp:
     """``/help`` — show help."""
 
     def test_help(self) -> None:
         text = cmd_help()
         assert "/sessions" in text
+        assert "/model" in text
         assert "/memory" in text
         assert "/plan" in text
         assert "/verify" in text
