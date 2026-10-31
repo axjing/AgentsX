@@ -18,6 +18,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+import agentsx.bootstrap  # noqa: F401
 from agentsx.agent.harness import AgentHarness
 from agentsx.cli import repl
 from agentsx.config import get_settings
