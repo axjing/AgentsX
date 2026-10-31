@@ -27,15 +27,14 @@ See https://github.com/NousResearch/hermes-agent/issues/44873 for the
 original problem report that inspired this approach.
 """
 
+import ctypes
+import os
 import sys
 
 
 def _bootstrap() -> None:
     if sys.platform != "win32":
         return
-
-    import ctypes  # noqa: PLC0415
-    import os  # noqa: PLC0415
 
     # Set the Windows console code page to UTF-8 (CP 65001).
     # This ensures that subprocess heredocs and direct console writes

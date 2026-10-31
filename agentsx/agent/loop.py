@@ -85,6 +85,7 @@ from agentsx.protocol.messages import (
 )
 from agentsx.provider import Provider
 from agentsx.security.policy import ExecutionPolicy
+from agentsx.security.resource_limits import get_limits
 from agentsx.tools import ToolRegistry
 
 logger = logging.getLogger(__name__)
@@ -681,8 +682,6 @@ async def _execute_tool_with_status(
         max_output: Maximum characters to keep (0 = use resource_limits default).
             Acts as a per-call ceiling on the resource limit.
     """
-    from agentsx.security.resource_limits import get_limits  # noqa: PLC0415
-
     result = await tools.call(tc.name, **tc.arguments)
     if result.tool_call_id == "":
         result.tool_call_id = tc.id

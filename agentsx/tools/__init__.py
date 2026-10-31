@@ -17,7 +17,11 @@ Toolset support (inspired by Hermes-Agent's toolset composition):
 """
 
 import inspect
+import sys
+import types
+import typing
 from collections.abc import Callable
+from enum import Enum
 from typing import Any, TypeVar
 
 from agentsx.protocol.errors import ToolError
@@ -293,10 +297,6 @@ def _json_schema(fn: Callable[..., Any]) -> dict[str, object]:
     ``typing.Optional``, ``Literal``, ``Enum``, and generic containers
     (``list[str]``, ``dict[str, int]``).
     """
-    import sys  # noqa: PLC0415
-    import types  # noqa: PLC0415
-    import typing  # noqa: PLC0415
-
     try:
         sig = inspect.signature(fn)
     except (ValueError, TypeError):
@@ -347,9 +347,6 @@ def _json_schema(fn: Callable[..., Any]) -> dict[str, object]:
 
 def _build_schema_type(annotation: type) -> dict[str, object]:
     """Build a JSON Schema fragment for a single Python type."""
-    import typing  # noqa: PLC0415
-    from enum import Enum  # noqa: PLC0415
-
     origin = getattr(annotation, "__origin__", None)
 
     # Literal["a", "b", "c"]

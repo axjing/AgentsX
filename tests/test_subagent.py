@@ -2,6 +2,8 @@
 and orchestrator (``agentsx/orchestrator.py``).
 """
 
+import asyncio
+import time
 from collections.abc import AsyncIterator, Generator
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -9,11 +11,15 @@ import pytest
 
 from agentsx.agent.subagent import (
     SubAgentConfig,
+    SubAgentRole,
     SubAgentRuntime,
     _build_subagent_tools,
 )
 from agentsx.orchestrator import Orchestrator, SubAgentRecord
+from agentsx.protocol.events import StreamEvent, TextStreamEvent
 from agentsx.protocol.messages import AgentMessage, MessageRole
+from agentsx.provider import Model, Provider
+from agentsx.tools.builtin.orchestration.subagent import spawn_agent
 
 
 class TestSubAgentConfig:
@@ -78,8 +84,6 @@ class TestSubAgentRuntime:
 
         patcher = patch.object(subagent_mod, "create_provider")
         mock_factory = patcher.start()
-        from agentsx.protocol.events import StreamEvent, TextStreamEvent
-        from agentsx.provider import Model, Provider
 
         class _MockProvider(Provider):
             def __init__(self) -> None:
@@ -168,8 +172,6 @@ class TestOrchestrator:
         o = Orchestrator(max_active=1)
         config = SubAgentConfig(model_name="gpt-4o", timeout=3600)
 
-        import asyncio
-
         first_started = asyncio.Event()
 
         class _HangingRuntime:
@@ -201,9 +203,6 @@ class TestOrchestrator:
         self,
         mock_factory: MagicMock,
     ) -> None:
-        from agentsx.protocol.events import StreamEvent, TextStreamEvent
-        from agentsx.provider import Model, Provider
-
         class _MockProvider2(Provider):
             def __init__(self) -> None:
                 self.model = Model(
@@ -229,7 +228,6 @@ class TestOrchestrator:
 
         config = SubAgentConfig(model_name="gpt-4o")
         runtime = SubAgentRuntime(config)
-        import time
 
         record = SubAgentRecord(
             runtime=runtime,
@@ -250,8 +248,6 @@ class TestOrchestrator:
             mock_runtime = AsyncMock()
             mock_runtime.id = "slow-agent"
 
-            import asyncio
-
             async def never_ending(_prompt: str) -> str:
                 await asyncio.sleep(3600)
                 return "never"
@@ -261,3 +257,60 @@ class TestOrchestrator:
 
             with pytest.raises((TimeoutError, asyncio.TimeoutError)):
                 await o.spawn(config, "slow task")
+
+
+class TestSpawnAgentTool:
+    """Tests for ``spawn_agent`` tool implementation."""
+
+    @pytest.mark.asyncio
+    async def test_spawn_agent_success(self) -> None:
+        with patch(
+            "agentsx.tools.builtin.orchestration.subagent._get_orchestra"
+        ) as mock_get:
+            mock_orc = AsyncMock()
+            mock_orc.spawn = AsyncMock(return_value="Subagent task output")
+            mock_get.return_value = mock_orc
+
+            res = await spawn_agent.call(
+                prompt="Analyze data",
+                role="leaf",
+                max_steps=5,
+            )
+            assert not res.is_error
+            assert "Subagent task output" in res.content
+            mock_orc.spawn.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_spawn_agent_max_depth_exceeded(self) -> None:
+        res = await spawn_agent.call(
+            prompt="Too deep",
+            max_spawn_depth=2,
+            current_depth=2,
+        )
+        assert "maximum spawn depth (2) exceeded" in res.content
+
+    @pytest.mark.asyncio
+    async def test_spawn_agent_error_handling(self) -> None:
+        with patch(
+            "agentsx.tools.builtin.orchestration.subagent._get_orchestra"
+        ) as mock_get:
+            mock_orc = AsyncMock()
+            mock_orc.spawn = AsyncMock(side_effect=RuntimeError("Subagent failed"))
+            mock_get.return_value = mock_orc
+
+            res = await spawn_agent.call(prompt="Will fail")
+            assert "Sub-agent error: Subagent failed" in res.content
+
+    @pytest.mark.asyncio
+    async def test_spawn_agent_invalid_role_fallback(self) -> None:
+        with patch(
+            "agentsx.tools.builtin.orchestration.subagent._get_orchestra"
+        ) as mock_get:
+            mock_orc = AsyncMock()
+            mock_orc.spawn = AsyncMock(return_value="OK")
+            mock_get.return_value = mock_orc
+
+            res = await spawn_agent.call(prompt="Test role", role="nonexistent_role")
+            assert not res.is_error
+            config_arg = mock_orc.spawn.call_args[0][0]
+            assert config_arg.role == SubAgentRole.LEAF

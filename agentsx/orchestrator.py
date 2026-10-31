@@ -5,6 +5,7 @@ The parent agent interacts with sub-agents exclusively through the
 ``spawn_agent`` tool, which delegates to the orchestrator.
 """
 
+import asyncio
 import time
 from dataclasses import dataclass
 
@@ -45,11 +46,18 @@ class Orchestrator:
         self._agents: dict[str, SubAgentRecord] = {}
 
     @property
+    def active_count(self) -> int:
+        """Number of currently running sub-agents."""
+        return len(self._agents)
+
+    @property
     def max_active(self) -> int:
+        """Maximum allowed concurrent sub-agents."""
         return self._max_active
 
     @property
     def max_spawn_depth(self) -> int:
+        """Maximum allowed sub-agent recursion depth."""
         return self._max_spawn_depth
 
     async def spawn(
@@ -57,21 +65,21 @@ class Orchestrator:
         config: SubAgentConfig,
         prompt: str,
         current_depth: int = 0,
-        **kwargs: object,  # noqa: ARG002
+        **kwargs: object,
     ) -> str:
-        """Spawn a sub-agent and wait for its result.
+        """Spawn a sub-agent, run it to completion, and return its output.
 
         Args:
-            config: Sub-agent configuration (model, tools, etc.).
-            prompt: The task prompt for the sub-agent.
+            config: Runtime configuration for the sub-agent.
+            prompt: The task instruction for the sub-agent.
             current_depth: Current recursion depth.
+            **kwargs: Extra parameters (for compatibility).
 
         Returns:
             The sub-agent's final response text.
 
         Raises:
-            RuntimeError: If the maximum number of active agents is reached.
-            RuntimeError: If maximum spawn depth is exceeded.
+            RuntimeError: If max concurrent sub-agents or max depth is reached.
             TimeoutError: If execution exceeds *config.timeout* seconds.
         """
         if len(self._agents) >= self._max_active:
@@ -134,8 +142,6 @@ async def _run_with_timeout(
 
     Uses ``asyncio.wait_for`` to enforce the timeout.
     """
-    import asyncio  # noqa: PLC0415
-
     try:
         return await asyncio.wait_for(runtime.run(prompt), timeout=timeout)
     except asyncio.TimeoutError:
