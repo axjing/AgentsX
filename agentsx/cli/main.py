@@ -40,6 +40,7 @@ from agentsx.security.policy import ExecutionPolicy
 from agentsx.session import create_session_store
 from agentsx.tools import ToolRegistry
 from agentsx.tools.builtin import ALL_TOOLS
+from agentsx.tools.builtin.mcp import load_mcp_configs, register_mcp_servers
 
 console = Console()
 logger = logging.getLogger(__name__)
@@ -195,6 +196,9 @@ async def _async_run(
     if not no_tools:
         registry = ToolRegistry()
         registry.register_all(*ALL_TOOLS)
+        mcp_configs = load_mcp_configs()
+        if mcp_configs:
+            await register_mcp_servers(registry, mcp_configs)
 
     steps = max_steps or settings.max_steps
 
@@ -314,6 +318,11 @@ async def _async_chat(
     if not no_tools:
         registry = ToolRegistry()
         registry.register_all(*ALL_TOOLS)
+        mcp_configs = load_mcp_configs(
+            Path(workspace).resolve() if workspace else None,
+        )
+        if mcp_configs:
+            await register_mcp_servers(registry, mcp_configs)
 
     steps = max_steps or settings.max_steps
 

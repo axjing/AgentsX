@@ -2,12 +2,20 @@
 
 import asyncio
 import json
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from agentsx.security.policy import Decision, ExecutionPolicy
-from agentsx.tools.builtin.mcp import MCPClient, MCPServerConfig, tool_mcp_call
+from agentsx.tools import ToolRegistry
+from agentsx.tools.builtin.mcp import (
+    MCPClient,
+    MCPServerConfig,
+    load_mcp_configs,
+    register_mcp_servers,
+    tool_mcp_call,
+)
 
 
 class DummyProcess:
@@ -311,3 +319,111 @@ class TestMCPSecurity:
             {"server_command": "rm -rf /"},
         )
         assert decision == Decision.FORBIDDEN
+
+
+# ── MCP Config Loader and Discovery Tests ─────────────────────────────
+
+
+class TestMCPConfigLoader:
+    """Tests for load_mcp_configs."""
+
+    def test_load_mcp_configs_empty(self, tmp_path: Path, monkeypatch: object) -> None:
+        monkeypatch.setattr(Path, "cwd", lambda: tmp_path / "proj")  # type: ignore[attr-defined]
+        monkeypatch.setattr(Path, "home", lambda: tmp_path / "home")  # type: ignore[attr-defined]
+        configs = load_mcp_configs()
+        assert configs == {}
+
+    def test_load_mcp_configs_valid(self, tmp_path: Path, monkeypatch: object) -> None:
+        proj_dir = tmp_path / "proj"
+        proj_dir.mkdir(parents=True)
+        home_dir = tmp_path / "home"
+        home_dir.mkdir(parents=True)
+        monkeypatch.setattr(Path, "cwd", lambda: proj_dir)  # type: ignore[attr-defined]
+        monkeypatch.setattr(Path, "home", lambda: home_dir)  # type: ignore[attr-defined]
+
+        mcp_file = proj_dir / ".agentsx" / "mcp.json"
+        mcp_file.parent.mkdir(parents=True)
+        mcp_file.write_text(
+            json.dumps(
+                {
+                    "mcpServers": {
+                        "sqlite": {
+                            "command": "uvx",
+                            "args": ["mcp-server-sqlite", "--db", "test.db"],
+                            "env": {"DEBUG": "1"},
+                            "timeout": 45.0,
+                        }
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        configs = load_mcp_configs()
+        assert "sqlite" in configs
+        cfg = configs["sqlite"]
+        assert cfg.command == "uvx"
+        assert cfg.args == ["mcp-server-sqlite", "--db", "test.db"]
+        assert cfg.env == {"DEBUG": "1"}
+        assert cfg.timeout == 45.0
+
+    def test_load_mcp_configs_invalid_json(
+        self, tmp_path: Path, monkeypatch: object
+    ) -> None:
+        proj_dir = tmp_path / "proj"
+        proj_dir.mkdir(parents=True)
+        monkeypatch.setattr(Path, "cwd", lambda: proj_dir)  # type: ignore[attr-defined]
+        monkeypatch.setattr(Path, "home", lambda: tmp_path / "home")  # type: ignore[attr-defined]
+
+        mcp_file = proj_dir / ".agentsx" / "mcp.json"
+        mcp_file.parent.mkdir(parents=True)
+        mcp_file.write_text("{malformed: json", encoding="utf-8")
+
+        configs = load_mcp_configs()
+        assert configs == {}
+
+
+class TestMCPRegistration:
+    """Tests for register_mcp_servers."""
+
+    @pytest.mark.asyncio
+    async def test_register_mcp_servers_success(self) -> None:
+        registry = ToolRegistry()
+        mock_client = MagicMock()
+        mock_client.connect = AsyncMock()
+        mock_client.list_tools = AsyncMock(
+            return_value=[
+                {
+                    "name": "fetch_data",
+                    "description": "Fetch database rows",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {"query": {"type": "string"}},
+                    },
+                }
+            ]
+        )
+        mock_client.call_tool = AsyncMock(return_value="row1, row2")
+
+        with patch(
+            "agentsx.tools.builtin.mcp.config_loader.MCPClient",
+            return_value=mock_client,
+        ):
+            configs = {
+                "db": MCPServerConfig(command="sqlite-mcp"),
+            }
+            connected = await register_mcp_servers(registry, configs)
+            assert connected == ["db"]
+
+            tool = registry.get("mcp_db_fetch_data")
+            assert tool is not None
+            assert tool.description == "Fetch database rows"
+
+            res = await tool.call(query="SELECT 1")
+            assert not res.is_error
+            assert res.content == "row1, row2"
+            mock_client.call_tool.assert_called_once_with(
+                "fetch_data",
+                {"query": "SELECT 1"},
+            )
+
