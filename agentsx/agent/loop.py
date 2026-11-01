@@ -101,12 +101,6 @@ ApprovalCallback: TypeAlias = Callable[[ToolCall], Awaitable[bool]]
 # message accumulation from a fast producer during long tool calls).
 _MAX_STEER_PER_STEP = 8
 
-# Truncation strategy: when tool output exceeds the limit, keep both the
-# head and tail so the LLM sees the beginning AND the end of long results
-# (e.g., the tail of a log file or the last lines of a diff).
-_TRUNCATE_HEAD = 3000
-_TRUNCATE_TAIL = 1000
-
 
 async def _compact_context(
     messages: list[AgentMessage],
@@ -756,21 +750,16 @@ async def _execute_tool_with_status(
         if max_output > 0:
             effective_limit = min(max_output, effective_limit)
         if effective_limit > 0 and len(result.content) > effective_limit:
-            truncated = _truncate_head_tail(result.content, effective_limit)
+            if effective_limit != limits.max_output_chars:
+                trunc_limits = dataclasses.replace(
+                    limits, max_output_chars=effective_limit
+                )
+            else:
+                trunc_limits = limits
+            truncated = trunc_limits.truncate_head_tail(result.content)
             result = dataclasses.replace(
                 result,
                 content=truncated,
                 metadata={**result.metadata, "truncated": "true"},
             )
     return result
-
-
-def _truncate_head_tail(text: str, max_len: int) -> str:
-    """Truncate long output keeping head and tail with omitted summary."""
-    if max_len <= _TRUNCATE_HEAD + _TRUNCATE_TAIL:
-        return f"{text[:max_len]}\n... (truncated)"
-
-    head = text[:_TRUNCATE_HEAD]
-    tail = text[-_TRUNCATE_TAIL:]
-    omitted = len(text) - _TRUNCATE_HEAD - _TRUNCATE_TAIL
-    return f"{head}\n\n... ({omitted:,} characters omitted) ...\n\n{tail}"
