@@ -277,3 +277,50 @@ class TestAsyncChat:
                         workspace=str(tmp_path),
                         backend="jsonl",
                     )
+
+    @pytest.mark.asyncio
+    async def test_chat_turn_cancellation_preserves_session(
+        self, tmp_path: Path
+    ) -> None:
+        mock_provider = MagicMock()
+        mock_provider.model.id = "test-model"
+
+        prompt_inputs: list[str | Exception] = ["Do something", EOFError()]
+
+        async def fake_prompt_async(prompt: str) -> str:
+            val = prompt_inputs.pop(0)
+            if isinstance(val, Exception):
+                raise val
+            return val
+
+        mock_session = MagicMock()
+        mock_session.prompt_async = AsyncMock(side_effect=fake_prompt_async)
+
+        mock_session_factory = MagicMock()
+        mock_session_factory.__getitem__.return_value = MagicMock(
+            return_value=mock_session
+        )
+        mock_session_factory.return_value = mock_session
+
+        async def fake_interrupted_prompt(
+            *args: object, **kwargs: object
+        ) -> AsyncIterator[AgentEvent]:
+            yield ModelRequestEvent(messages=[], model="test-model")
+            raise KeyboardInterrupt()
+
+        with patch("agentsx.cli.main.create_provider", return_value=mock_provider):
+            with patch("agentsx.cli.main.PromptSession", mock_session_factory):
+                with patch(
+                    "agentsx.agent.harness.AgentHarness.prompt",
+                    side_effect=fake_interrupted_prompt,
+                ):
+                    # Should handle KeyboardInterrupt gracefully and not crash
+                    await _async_chat(
+                        model_name="test-model",
+                        system_prompt="Be concise",
+                        no_tools=True,
+                        max_steps=3,
+                        allow_all=True,
+                        workspace=str(tmp_path),
+                        backend="jsonl",
+                    )

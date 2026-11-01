@@ -179,6 +179,7 @@ class AgentHarness:
         Yields:
             AgentEvent items from the agent loop.
         """
+        self._cancelled = False
         if isinstance(user_input, AgentMessage):
             self._messages.append(user_input)
         else:
@@ -331,6 +332,8 @@ class AgentHarness:
             timeout=timeout,
             steer_queue=self._steer_queue,
         ):
+            if self._cancelled:
+                break
             if isinstance(event, ModelResponseEvent) and event.usage:
                 self._total_prompt_tokens += event.usage.get("prompt_tokens", 0)
                 self._total_completion_tokens += event.usage.get("completion_tokens", 0)

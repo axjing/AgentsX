@@ -425,40 +425,44 @@ async def _async_chat(
 
         # ── Process agent loop ───────────────────────────────────────
         content_buffer: list[str] = []
-        async for event in harness.prompt(user_msg, timeout=loop_timeout):
-            if isinstance(event, ModelRequestEvent):
-                console.print("[dim]Processing...[/dim]")
+        try:
+            async for event in harness.prompt(user_msg, timeout=loop_timeout):
+                if isinstance(event, ModelRequestEvent):
+                    console.print("[dim]Processing...[/dim]")
 
-            elif isinstance(event, ModelResponseEvent):
-                if event.delta:
-                    content_buffer.append(event.content)
-                    console.print(event.content, end="")
-                else:
-                    # Persist the assistant message
-                    if event.content:
-                        store.append(
-                            sess.id,
-                            AgentMessage(
-                                role=MessageRole.ASSISTANT,
-                                content=event.content,
-                            ),
-                        )
-                    console.print()
+                elif isinstance(event, ModelResponseEvent):
+                    if event.delta:
+                        content_buffer.append(event.content)
+                        console.print(event.content, end="")
+                    else:
+                        # Persist the assistant message
+                        if event.content:
+                            store.append(
+                                sess.id,
+                                AgentMessage(
+                                    role=MessageRole.ASSISTANT,
+                                    content=event.content,
+                                ),
+                            )
+                        console.print()
 
-            elif isinstance(event, ToolExecutionEvent):
-                repl.display_tool_event(event)
-                # Persist tool execution
-                store.append(
-                    sess.id,
-                    AgentMessage(
-                        role=MessageRole.TOOL,
-                        content=event.result.content,
-                        tool_call_id=event.result.tool_call_id,
-                        name=event.tool_call.name,
-                    ),
-                )
+                elif isinstance(event, ToolExecutionEvent):
+                    repl.display_tool_event(event)
+                    # Persist tool execution
+                    store.append(
+                        sess.id,
+                        AgentMessage(
+                            role=MessageRole.TOOL,
+                            content=event.result.content,
+                            tool_call_id=event.result.tool_call_id,
+                            name=event.tool_call.name,
+                        ),
+                    )
 
-            elif isinstance(event, ErrorEvent):
-                console.print(f"[red]Error: {event.error}[/red]")
+                elif isinstance(event, ErrorEvent):
+                    console.print(f"[red]Error: {event.error}[/red]")
+        except (KeyboardInterrupt, asyncio.CancelledError):
+            harness.cancel()
+            console.print("\n[yellow]Turn cancelled by user.[/yellow]")
 
         console.print()
