@@ -91,6 +91,7 @@ class ExecutionPolicy:
             "tool_file_edit",
             "tool_file_glob",
             "tool_file_grep",
+            "tool_bash",
         ):
             if not self._check_path_allowed(tool_name, tool_args or {}):
                 return Decision.FORBIDDEN
@@ -136,7 +137,9 @@ class ExecutionPolicy:
         """Check if the target path is within allowed directories."""
         path_val = tool_args.get("path", "")
         if not path_val:
-            path_val = tool_args.get("root", ".")
+            path_val = tool_args.get("root", "")
+        if not path_val and tool_name == "tool_bash":
+            path_val = tool_args.get("cwd", "")
         if not path_val or not isinstance(path_val, str):
             return True
         target = Path(path_val)

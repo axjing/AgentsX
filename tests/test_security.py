@@ -166,6 +166,29 @@ class TestExecutionPolicy:
             == Decision.FORBIDDEN
         )
 
+    def test_tool_bash_cwd_confinement(self, tmp_path: Path) -> None:
+        sandbox = tmp_path / "sandbox"
+        sandbox.mkdir()
+        outside = tmp_path / "outside"
+        outside.mkdir()
+
+        policy = ExecutionPolicy.default(allowed_dirs=[sandbox])
+        # bash inside sandbox is evaluated against default rule (PROMPT)
+        assert (
+            policy.evaluate("tool_bash", {"command": "ls", "cwd": str(sandbox)})
+            == Decision.PROMPT
+        )
+        # bash with cwd outside sandbox is blocked by PathGuard (FORBIDDEN)
+        assert (
+            policy.evaluate("tool_bash", {"command": "ls", "cwd": str(outside)})
+            == Decision.FORBIDDEN
+        )
+        # bash with traversal in cwd is blocked
+        assert (
+            policy.evaluate("tool_bash", {"command": "ls", "cwd": str(sandbox / "..")})
+            == Decision.FORBIDDEN
+        )
+
 
 # ── Integration with agent loop ──────────────────────────────
 
