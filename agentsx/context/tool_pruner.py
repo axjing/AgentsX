@@ -94,6 +94,45 @@ def _summarize_web_search(args: dict[str, object], content: str) -> str:
     return f"[web_search] '{query}' ({content_len:,} chars)"
 
 
+def _summarize_spawn_agent(args: dict[str, object], content: str) -> str:
+    """Summarize a sub-agent delegation tool call."""
+    prompt = str(args.get("prompt", ""))
+    if len(prompt) > 60:
+        prompt = prompt[:57] + "..."
+    role = str(args.get("role", "leaf"))
+    content_len = len(content)
+    return f"[subagent:{role}] '{prompt}' -> {content_len:,} chars output"
+
+
+def _summarize_plan(args: dict[str, object], content: str) -> str:
+    """Summarize a task plan tool call."""
+    action = str(args.get("action", "view"))
+    task = str(args.get("task", ""))
+    if task:
+        if len(task) > 40:
+            task = task[:37] + "..."
+        return f"[plan] action={action} '{task}'"
+    lines = len(content.strip().splitlines())
+    return f"[plan] action={action} ({lines} lines)"
+
+
+def _summarize_remember(args: dict[str, object], content: str) -> str:
+    """Summarize a persistent memory tool call."""
+    rule = str(args.get("content", ""))
+    if len(rule) > 60:
+        rule = rule[:57] + "..."
+    scope = str(args.get("scope", "project"))
+    return f"[remember:{scope}] '{rule}'"
+
+
+def _summarize_mcp_call(args: dict[str, object], content: str) -> str:
+    """Summarize an MCP tool call."""
+    server = str(args.get("server", "?"))
+    tool_name = str(args.get("tool", "?"))
+    content_len = len(content)
+    return f"[mcp:{server}] {tool_name} -> {content_len:,} chars"
+
+
 # Tool name -> summarizer function mapping.
 _SUMMARIZERS: dict[str, Callable[[dict[str, object], str], str]] = {
     "tool_bash": _summarize_bash,
@@ -104,6 +143,10 @@ _SUMMARIZERS: dict[str, Callable[[dict[str, object], str], str]] = {
     "tool_file_glob": _summarize_glob,
     "tool_web_fetch": _summarize_web_fetch,
     "tool_web_search": _summarize_web_search,
+    "spawn_agent": _summarize_spawn_agent,
+    "tool_plan": _summarize_plan,
+    "tool_remember": _summarize_remember,
+    "tool_mcp_call": _summarize_mcp_call,
 }
 
 # Maximum content length to keep verbatim (chars).

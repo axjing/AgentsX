@@ -6,7 +6,11 @@ from agentsx.context.tool_pruner import (
     _summarize_edit,
     _summarize_glob,
     _summarize_grep,
+    _summarize_mcp_call,
+    _summarize_plan,
     _summarize_read,
+    _summarize_remember,
+    _summarize_spawn_agent,
     _summarize_web_fetch,
     _summarize_web_search,
     _summarize_write,
@@ -101,6 +105,34 @@ class TestToolSummarizers:
         args: dict[str, object] = {"query": "python asyncio"}
         summary = _summarize_web_search(args, "Result 1\nResult 2")
         assert summary == "[web_search] 'python asyncio' (17 chars)"
+
+    def test_summarize_spawn_agent(self) -> None:
+        args: dict[str, object] = {
+            "prompt": "Analyze code structure",
+            "role": "leaf",
+        }
+        summary = _summarize_spawn_agent(args, "Full report")
+        assert summary == (
+            "[subagent:leaf] 'Analyze code structure' -> 11 chars output"
+        )
+
+    def test_summarize_plan(self) -> None:
+        args: dict[str, object] = {"action": "add", "task": "Implement feature X"}
+        summary = _summarize_plan(args, "Task added.")
+        assert summary == "[plan] action=add 'Implement feature X'"
+
+    def test_summarize_remember(self) -> None:
+        args: dict[str, object] = {
+            "content": "Always verify with pytest",
+            "scope": "project",
+        }
+        summary = _summarize_remember(args, "Memory rule saved.")
+        assert summary == "[remember:project] 'Always verify with pytest'"
+
+    def test_summarize_mcp_call(self) -> None:
+        args: dict[str, object] = {"server": "filesystem", "tool": "list_directory"}
+        summary = _summarize_mcp_call(args, '["file1.txt", "file2.txt"]')
+        assert summary == "[mcp:filesystem] list_directory -> 26 chars"
 
 
 class TestSummarizeToolCall:
