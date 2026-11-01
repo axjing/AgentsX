@@ -34,6 +34,7 @@ from agentsx.protocol.messages import (
     ContentPart,
     Decision,
     MessageRole,
+    ToolCall,
 )
 from agentsx.provider import create_provider
 from agentsx.security.policy import ExecutionPolicy
@@ -337,6 +338,23 @@ async def _async_chat(
     else:
         policy = ExecutionPolicy.default()
 
+    # ── Prompt session ───────────────────────────────────────────────
+    session = PromptSession[str](history=InMemoryHistory())
+
+    async def _cli_approval_callback(tc: ToolCall) -> bool:
+        args_str = ", ".join(f"{k}={v!r}" for k, v in tc.arguments.items())
+        if len(args_str) > 100:
+            args_str = args_str[:97] + "..."
+        console.print(
+            f"\n[yellow]Security Policy Approval Required:[/yellow] "
+            f"{tc.name}({args_str})"
+        )
+        try:
+            ans = await session.prompt_async("Allow execution? [y/N]: ")
+            return ans.strip().lower() in ("y", "yes")
+        except (EOFError, KeyboardInterrupt):
+            return False
+
     # ── Agent Harness ────────────────────────────────────────────────
     harness = AgentHarness(
         provider=provider,
@@ -346,12 +364,10 @@ async def _async_chat(
         max_steps=steps,
         session_store=store,
         session_id=sess.id,
+        approval_callback=_cli_approval_callback,
     )
     if messages:
         harness.load_messages(messages)
-
-    # ── Prompt session ───────────────────────────────────────────────
-    session = PromptSession[str](history=InMemoryHistory())
 
     # ── Welcome ──────────────────────────────────────────────────────
     info = Table.grid(padding=(0, 1))

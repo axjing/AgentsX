@@ -13,17 +13,23 @@ from agentsx.protocol.events import (
     ErrorEvent,
     ModelRequestEvent,
     ModelResponseEvent,
+    PromptEvent,
     RetryEvent,
     TextDeltaEvent,
     TextStreamEvent,
+    ToolCallStreamEvent,
+    ToolExecutionEvent,
     TurnEndEvent,
     TurnStartEvent,
 )
 from agentsx.protocol.messages import (
     AgentMessage,
+    Decision,
     MessageRole,
+    ToolCall,
 )
 from agentsx.provider import Model, Provider
+from agentsx.security.policy import ExecutionPolicy, Rule
 from agentsx.tools import ToolRegistry, tool
 
 
@@ -203,3 +209,101 @@ class TestAgent:
         async for event in run_agent_loop(provider, msgs, tools=registry):
             events.append(event)
         assert len(events) == 10
+
+
+class TestApprovalCallback:
+    """Tests for run_agent_loop approval_callback with Decision.PROMPT."""
+
+    class _ToolCallingProvider(Provider):
+        def __init__(self) -> None:
+            self.model = Model(id="test", provider_name="test")
+            self.tools = None
+            self._step = 0
+
+        async def stream(
+            self, messages: list[AgentMessage]
+        ) -> AsyncIterator[ToolCallStreamEvent | TextStreamEvent]:
+            self._step += 1
+            if self._step == 1:
+                yield ToolCallStreamEvent(
+                    tool_call=ToolCall(
+                        id="call_1",
+                        name="dangerous_tool",
+                        arguments={"path": "important.txt"},
+                    )
+                )
+            else:
+                yield TextStreamEvent(text="Finished")
+
+        def format_messages(self, messages: list[AgentMessage]) -> list[dict[str, Any]]:
+            return []
+
+    @pytest.mark.asyncio
+    async def test_approval_callback_approved(self) -> None:
+        provider = self._ToolCallingProvider()
+        registry = ToolRegistry()
+
+        @tool(description="dangerous")
+        def dangerous_tool(path: str) -> str:
+            return f"executed on {path}"
+
+        registry.register(dangerous_tool)
+        policy = ExecutionPolicy(
+            rules=[Rule("dangerous_tool:*", Decision.PROMPT)],
+            default_decision=Decision.ALLOW,
+        )
+
+        async def allow_all_cb(tc: ToolCall) -> bool:
+            return True
+
+        msgs = [AgentMessage(role=MessageRole.USER, content="Run tool")]
+        events: list[AgentEvent] = []
+        async for event in run_agent_loop(
+            provider,
+            msgs,
+            tools=registry,
+            policy=policy,
+            approval_callback=allow_all_cb,
+        ):
+            events.append(event)
+
+        prompt_events = [e for e in events if isinstance(e, PromptEvent)]
+        tool_execs = [e for e in events if isinstance(e, ToolExecutionEvent)]
+        assert len(prompt_events) == 1
+        assert len(tool_execs) == 1
+        assert not tool_execs[0].result.is_error
+        assert "executed on important.txt" in tool_execs[0].result.content
+
+    @pytest.mark.asyncio
+    async def test_approval_callback_rejected(self) -> None:
+        provider = self._ToolCallingProvider()
+        registry = ToolRegistry()
+
+        @tool(description="dangerous")
+        def dangerous_tool(path: str) -> str:
+            return "executed"
+
+        registry.register(dangerous_tool)
+        policy = ExecutionPolicy(
+            rules=[Rule("dangerous_tool:*", Decision.PROMPT)],
+            default_decision=Decision.ALLOW,
+        )
+
+        async def deny_cb(tc: ToolCall) -> bool:
+            return False
+
+        msgs = [AgentMessage(role=MessageRole.USER, content="Run tool")]
+        events: list[AgentEvent] = []
+        async for event in run_agent_loop(
+            provider,
+            msgs,
+            tools=registry,
+            policy=policy,
+            approval_callback=deny_cb,
+        ):
+            events.append(event)
+
+        tool_execs = [e for e in events if isinstance(e, ToolExecutionEvent)]
+        assert len(tool_execs) == 1
+        assert tool_execs[0].result.is_blocked
+        assert "requires user confirmation" in tool_execs[0].result.content

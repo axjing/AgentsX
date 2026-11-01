@@ -6,9 +6,10 @@ convenient single-call usage.
 """
 
 from agentsx.agent.agent import Agent
-from agentsx.agent.loop import run_agent_loop
+from agentsx.agent.loop import ApprovalCallback, run_agent_loop
 
 __all__ = [
     "Agent",
+    "ApprovalCallback",
     "run_agent_loop",
 ]

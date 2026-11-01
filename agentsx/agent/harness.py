@@ -14,7 +14,7 @@ from collections import deque
 from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 
-from agentsx.agent.loop import run_agent_loop
+from agentsx.agent.loop import ApprovalCallback, run_agent_loop
 from agentsx.context.compaction import compact_messages, should_compact
 from agentsx.extensions.api import ExtensionAPI
 from agentsx.protocol.errors import SessionError
@@ -60,6 +60,7 @@ class AgentHarness:
         max_steps: int | None = None,
         session_store: SessionBackend | None = None,
         session_id: str = "",
+        approval_callback: ApprovalCallback | None = None,
     ) -> None:
         """Initialise the harness.
 
@@ -72,6 +73,7 @@ class AgentHarness:
             max_steps: Maximum tool-calling iterations per turn.
             session_store: Optional session store for compaction.
             session_id: Session ID for compaction entry recording.
+            approval_callback: Optional async callback for tool execution confirmation.
         """
         self._provider = provider
         self._system_prompt = system_prompt
@@ -81,6 +83,7 @@ class AgentHarness:
         self._max_steps = max_steps
         self._session_store = session_store
         self._session_id = session_id
+        self._approval_callback = approval_callback
         self._messages: list[AgentMessage] = []
         self._cancelled = False
         self._listeners: list[EventListener] = []
@@ -331,6 +334,7 @@ class AgentHarness:
             extensions=self._extensions,
             timeout=timeout,
             steer_queue=self._steer_queue,
+            approval_callback=self._approval_callback,
         ):
             if self._cancelled:
                 break

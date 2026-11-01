@@ -26,7 +26,7 @@ import dataclasses
 import logging
 import time
 from collections import deque
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import TypeAlias
 
 from agentsx.agent.watchdog import Watchdog
@@ -94,6 +94,7 @@ from agentsx.tools import ToolRegistry
 logger = logging.getLogger(__name__)
 
 _StreamOrRetry: TypeAlias = StreamEvent | RetryEvent
+ApprovalCallback: TypeAlias = Callable[[ToolCall], Awaitable[bool]]
 
 
 # Maximum steer messages consumed per loop iteration (prevents unbounded
@@ -294,6 +295,7 @@ async def run_agent_loop(
     compact_max_tokens: int = 0,
     compact_max_messages: int = 50,
     steer_queue: deque[str] | None = None,
+    approval_callback: ApprovalCallback | None = None,
 ) -> AsyncIterator[AgentEvent]:
     """Run the ReAct agent loop.
 
@@ -317,6 +319,9 @@ async def run_agent_loop(
         steer_queue: Optional mutable deque for interrupt-and-redirect.
             Items pushed during the loop become user messages in the next
             turn after the current step completes.
+        approval_callback: Optional async callback invoked when a tool call
+            evaluates to ``Decision.PROMPT``. If it returns True, the tool is
+            executed; otherwise it is blocked.
 
     Yields:
         ``AgentEvent`` items — ``ModelRequestEvent``, ``ModelResponseEvent``
@@ -521,14 +526,29 @@ async def run_agent_loop(
                         tool_call=tc,
                         policy_decision="requires user confirmation",
                     )
-                    tool_result = ToolResult(
-                        tool_call_id=tc.id,
-                        status=ToolResultStatus.BLOCKED,
-                        content=(
-                            f"Blocked by policy: '{tc.name}' requires "
-                            "user confirmation (set policy to ALLOW to skip)"
-                        ),
-                    )
+                    approved = False
+                    if approval_callback is not None:
+                        try:
+                            approved = await approval_callback(tc)
+                        except Exception as exc:  # noqa: BLE001
+                            logger.warning("Approval callback error: %s", exc)
+                            approved = False
+
+                    if approved:
+                        tool_result = await _execute_tool_with_status(
+                            tc,
+                            tools,
+                            settings.max_tool_output,
+                        )
+                    else:
+                        tool_result = ToolResult(
+                            tool_call_id=tc.id,
+                            status=ToolResultStatus.BLOCKED,
+                            content=(
+                                f"Blocked by policy: '{tc.name}' requires "
+                                "user confirmation (set policy to ALLOW to skip)"
+                            ),
+                        )
                 else:  # ALLOW
                     tool_result = await _execute_tool_with_status(
                         tc,
