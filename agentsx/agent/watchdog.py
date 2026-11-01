@@ -17,6 +17,7 @@ class WatchdogWarning:
     kind: str
     tool_name: str
     count: int
+    circuit_broken: bool = False
 
 
 class Watchdog:
@@ -26,6 +27,8 @@ class Watchdog:
         self,
         max_identical_calls: int = 3,
         max_consecutive_errors: int = 4,
+        circuit_breaker_identical: int = 5,
+        circuit_breaker_errors: int = 6,
     ) -> None:
         """Initialize the watchdog.
 
@@ -34,9 +37,15 @@ class Watchdog:
                 before triggering a loop warning.
             max_consecutive_errors: Number of consecutive tool errors
                 before triggering a failure warning.
+            circuit_breaker_identical: Threshold to trip the circuit breaker
+                for identical tool call thrashing.
+            circuit_breaker_errors: Threshold to trip the circuit breaker
+                for consecutive tool failures.
         """
         self._max_identical_calls = max_identical_calls
         self._max_consecutive_errors = max_consecutive_errors
+        self._circuit_breaker_identical = circuit_breaker_identical
+        self._circuit_breaker_errors = circuit_breaker_errors
         self._last_call_signature: tuple[str, str] | None = None
         self._identical_call_count: int = 0
         self._consecutive_error_count: int = 0
@@ -75,10 +84,24 @@ class Watchdog:
         else:
             self._consecutive_error_count = 0
 
-        # Check identical call thrashing
-        if self._identical_call_count >= self._max_identical_calls:
+        # Check circuit breaker for thrashing (hard stop)
+        if self._identical_call_count >= self._circuit_breaker_identical:
             count = self._identical_call_count
-            self._identical_call_count = 0
+            return WatchdogWarning(
+                message=(
+                    f"Tool '{tool_name}' was called {count} times consecutively "
+                    "with identical arguments without progress. "
+                    "Circuit breaker tripped: execution stopped."
+                ),
+                kind="circuit_breaker_thrashing",
+                tool_name=tool_name,
+                count=count,
+                circuit_broken=True,
+            )
+
+        # Check identical call thrashing (soft warning)
+        if self._identical_call_count == self._max_identical_calls:
+            count = self._identical_call_count
             return WatchdogWarning(
                 message=(
                     f"Tool '{tool_name}' was called {count} times consecutively "
@@ -88,12 +111,26 @@ class Watchdog:
                 kind="thrashing",
                 tool_name=tool_name,
                 count=count,
+                circuit_broken=False,
             )
 
-        # Check consecutive errors
-        if self._consecutive_error_count >= self._max_consecutive_errors:
+        # Check circuit breaker for errors (hard stop)
+        if self._consecutive_error_count >= self._circuit_breaker_errors:
             count = self._consecutive_error_count
-            self._consecutive_error_count = 0
+            return WatchdogWarning(
+                message=(
+                    f"Encountered {count} consecutive tool execution errors. "
+                    "Circuit breaker tripped: execution stopped."
+                ),
+                kind="circuit_breaker_errors",
+                tool_name=tool_name,
+                count=count,
+                circuit_broken=True,
+            )
+
+        # Check consecutive errors (soft warning)
+        if self._consecutive_error_count == self._max_consecutive_errors:
+            count = self._consecutive_error_count
             return WatchdogWarning(
                 message=(
                     f"Encountered {count} consecutive tool execution errors. "
@@ -102,6 +139,7 @@ class Watchdog:
                 kind="consecutive_errors",
                 tool_name=tool_name,
                 count=count,
+                circuit_broken=False,
             )
 
         return None

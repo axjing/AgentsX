@@ -613,6 +613,14 @@ async def run_agent_loop(
                         content=f"[System Watchdog Alert: {warning.message}]",
                     ),
                 )
+                if warning.circuit_broken:
+                    yield ErrorEvent(
+                        error=RuntimeError(
+                            f"Watchdog circuit breaker tripped: {warning.message}"
+                        ),
+                        context=f"step {step} aborted due to unrecoverable loop",
+                    )
+                    return
 
         # ── Turn end (after tool executions) ──────────────────────────
         yield TurnEndEvent(turn=step, had_tool_calls=True)
