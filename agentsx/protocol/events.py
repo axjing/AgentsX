@@ -23,6 +23,7 @@ __all__ = [
     "ToolExecutionStartEvent",
     "TurnEndEvent",
     "TurnStartEvent",
+    "WatchdogEvent",
 ]
 
 
@@ -154,6 +155,17 @@ class ToolExecutionStartEvent:
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
+@dataclass
+class WatchdogEvent:
+    """Emitted when the watchdog detects a loop anomaly or repeated failures."""
+
+    warning: str
+    kind: str = "thrashing"
+    tool_name: str = ""
+    count: int = 0
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 AgentEvent = (
     AgentStartEvent
     | AgentEndEvent
@@ -168,6 +180,7 @@ AgentEvent = (
     | CompactionEvent
     | PromptEvent
     | RetryEvent
+    | WatchdogEvent
 )
 """Union type for all agent events. Consumers use ``isinstance()`` to dispatch."""
 

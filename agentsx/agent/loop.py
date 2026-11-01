@@ -29,6 +29,7 @@ from collections import deque
 from collections.abc import AsyncIterator
 from typing import TypeAlias
 
+from agentsx.agent.watchdog import Watchdog
 from agentsx.config import AgentsXSettings, get_settings
 from agentsx.context.compaction import (
     SUMMARY_END_MARKER,
@@ -74,6 +75,7 @@ from agentsx.protocol.events import (
     ToolExecutionStartEvent,
     TurnEndEvent,
     TurnStartEvent,
+    WatchdogEvent,
 )
 from agentsx.protocol.messages import (
     AgentMessage,
@@ -319,6 +321,7 @@ async def run_agent_loop(
 
     step = 0
     loop_start = time.monotonic()
+    watchdog = Watchdog()
 
     yield AgentStartEvent(model=provider.model.id, step=0)
 
@@ -577,6 +580,27 @@ async def run_agent_loop(
                     tool_call_id=tc.id,
                 ),
             )
+
+            # ── Watchdog loop and failure check ───────────────────────
+            warning = watchdog.record_tool_call(
+                tool_name=tc.name,
+                arguments=tc.arguments,
+                is_error=tool_result.is_error,
+            )
+            if warning is not None:
+                logger.warning("Watchdog triggered: %s", warning.message)
+                yield WatchdogEvent(
+                    warning=warning.message,
+                    kind=warning.kind,
+                    tool_name=warning.tool_name,
+                    count=warning.count,
+                )
+                messages.append(
+                    AgentMessage(
+                        role=MessageRole.USER,
+                        content=f"[System Watchdog Alert: {warning.message}]",
+                    ),
+                )
 
         # ── Turn end (after tool executions) ──────────────────────────
         yield TurnEndEvent(turn=step, had_tool_calls=True)
