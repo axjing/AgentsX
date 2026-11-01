@@ -47,13 +47,39 @@ def tool_file_edit(
     filepath = Path(path)
     if not filepath.exists():
         return f"Error: file not found: {path}"
-    text = filepath.read_text(encoding="utf-8")
-    if old_string not in text:
-        return f"Error: old_string not found in {path}"
-    if old_string == new_string:
+    if not filepath.is_file():
+        return f"Error: not a file: {path}"
+
+    text = filepath.read_text(encoding="utf-8", errors="replace")
+    is_crlf = "\r\n" in text
+
+    target_old = old_string
+    target_new = new_string
+
+    if target_old not in text:
+        norm_text = text.replace("\r\n", "\n")
+        norm_old = old_string.replace("\r\n", "\n")
+        if norm_old in norm_text:
+            if is_crlf:
+                target_old = norm_old.replace("\n", "\r\n")
+                target_new = new_string.replace("\r\n", "\n").replace("\n", "\r\n")
+            else:
+                target_old = norm_old
+                target_new = new_string.replace("\r\n", "\n")
+        else:
+            return f"Error: old_string not found in {path}"
+
+    if target_old == target_new:
         return f"No changes made to {path}: old_string and new_string are identical."
 
-    new_text = text.replace(old_string, new_string, 1)
+    match_count = text.count(target_old)
+    if match_count > 1:
+        return (
+            f"Error: old_string matches {match_count} locations in {path}. "
+            "Please include more surrounding context to make replacement unique."
+        )
+
+    new_text = text.replace(target_old, target_new, 1)
     filepath.write_text(new_text, encoding="utf-8")
 
     diff_lines = list(

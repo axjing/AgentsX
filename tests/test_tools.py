@@ -318,6 +318,43 @@ class TestToolFileEdit:
         )
         assert "identical" in res.content
 
+    @pytest.mark.asyncio
+    async def test_edit_file_crlf_self_healing(self, tmp_path: Path) -> None:
+        target = tmp_path / "crlf.py"
+        # File has Windows CRLF
+        target.write_bytes(b"line 1\r\nline 2\r\nline 3\r\n")
+        # LLM supplies Unix LF old_string and new_string
+        res = await tool_file_edit.call(
+            path=str(target),
+            old_string="line 2\n",
+            new_string="line 2 modified\n",
+        )
+        assert not res.is_error
+        assert "Edited" in res.content
+        assert b"line 1\r\nline 2 modified\r\nline 3\r\n" == target.read_bytes()
+
+    @pytest.mark.asyncio
+    async def test_edit_file_ambiguous_matches(self, tmp_path: Path) -> None:
+        target = tmp_path / "ambiguous.py"
+        target.write_text("val = 1\nval = 1\n")
+        res = await tool_file_edit.call(
+            path=str(target),
+            old_string="val = 1",
+            new_string="val = 2",
+        )
+        assert "matches 2 locations" in res.content
+
+    @pytest.mark.asyncio
+    async def test_edit_file_not_a_file(self, tmp_path: Path) -> None:
+        sub_dir = tmp_path / "subdir"
+        sub_dir.mkdir()
+        res = await tool_file_edit.call(
+            path=str(sub_dir),
+            old_string="a",
+            new_string="b",
+        )
+        assert "not a file" in res.content
+
 
 class TestToolFileGlob:
     """Glob tool."""
