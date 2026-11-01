@@ -233,6 +233,22 @@ class TestCmdStatus:
         assert "Git" in status_text
         assert "Plan" in status_text
 
+    def test_status_with_token_stats(self, tmp_path: Path) -> None:
+        status_text = cmd_status(
+            session_id="abcdef1234567890",
+            model_name="gpt-4o",
+            messages=[],
+            workspace_root=tmp_path,
+            token_stats={
+                "prompt_tokens": 1000,
+                "completion_tokens": 200,
+                "total_tokens": 1200,
+                "cached_tokens": 800,
+            },
+        )
+        assert "Tokens     : 1200 total (1000 in, 200 out)" in status_text
+        assert "Cache Hit: 80.0% (800 tokens)" in status_text
+
 
 class TestCmdHelp:
     """``/help`` — show help."""

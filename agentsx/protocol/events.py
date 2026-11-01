@@ -23,6 +23,7 @@ __all__ = [
     "ToolExecutionStartEvent",
     "TurnEndEvent",
     "TurnStartEvent",
+    "UsageStreamEvent",
     "WatchdogEvent",
 ]
 
@@ -201,5 +202,15 @@ class ToolCallStreamEvent:
     tool_call: ToolCall
 
 
-StreamEvent = TextStreamEvent | ToolCallStreamEvent
-"""Items yielded by ``Provider.stream()`` — text tokens or complete tool calls."""
+@dataclass
+class UsageStreamEvent:
+    """Usage statistics yielded from the provider stream."""
+
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+    cached_tokens: int = 0
+
+
+StreamEvent = TextStreamEvent | ToolCallStreamEvent | UsageStreamEvent
+"""Items yielded by ``Provider.stream()`` — text tokens, tool calls, or usage stats."""

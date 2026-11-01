@@ -75,6 +75,7 @@ from agentsx.protocol.events import (
     ToolExecutionStartEvent,
     TurnEndEvent,
     TurnStartEvent,
+    UsageStreamEvent,
     WatchdogEvent,
 )
 from agentsx.protocol.messages import (
@@ -183,6 +184,7 @@ class _StreamResult:
 
     content: str = ""
     tool_calls: list[ToolCallStreamEvent] = dataclasses.field(default_factory=list)
+    usage: dict[str, int] = dataclasses.field(default_factory=dict)
 
 
 async def _process_provider_stream(
@@ -200,6 +202,7 @@ async def _process_provider_stream(
     """
     content_parts: list[str] = []
     tool_calls: list[ToolCallStreamEvent] = []
+    usage_dict: dict[str, int] = {}
 
     provider_stream = provider.stream_with_retry(messages)
     step_timeout = settings.tool_timeout
@@ -221,6 +224,13 @@ async def _process_provider_stream(
                 yield ModelResponseEvent(content=event.text, delta=True)
             elif isinstance(event, ToolCallStreamEvent):
                 tool_calls.append(event)
+            elif isinstance(event, UsageStreamEvent):
+                usage_dict = {
+                    "prompt_tokens": event.prompt_tokens,
+                    "completion_tokens": event.completion_tokens,
+                    "total_tokens": event.total_tokens,
+                    "cached_tokens": event.cached_tokens,
+                }
             elif isinstance(event, RetryEvent):
                 yield event
     except TimeoutError as te:
@@ -251,6 +261,7 @@ async def _process_provider_stream(
 
     result.content = "".join(content_parts)
     result.tool_calls = tool_calls
+    result.usage = usage_dict
 
 
 _SENTINEL_ERROR = "__STREAM_ERROR_SENTINEL__"
@@ -422,6 +433,7 @@ async def run_agent_loop(
             content=full_content,
             delta=False,
             step=step,
+            usage=stream_result.usage or None,
         )
 
         # ── Append assistant message ──────────────────────────────────

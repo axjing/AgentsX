@@ -8,6 +8,7 @@ to provider-native dicts, build request kwargs, and parse raw streaming
 responses back into ``StreamEvent`` objects.
 """
 
+import json
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
 from typing import Any
@@ -16,6 +17,7 @@ from agentsx.protocol.events import (
     StreamEvent,
     TextStreamEvent,
     ToolCallStreamEvent,
+    UsageStreamEvent,
 )
 from agentsx.protocol.messages import AgentMessage, MessageRole, ToolCall
 from agentsx.provider.converters import (
@@ -84,8 +86,6 @@ async def _openai_parse_stream_impl(
     response: Any,
 ) -> AsyncIterator[StreamEvent]:
     """Async generator: parse OpenAI SSE response into ``StreamEvent`` objects."""
-    import json
-
     tool_deltas: dict[int, dict[str, str]] = {}
 
     async for line in response.aiter_lines():
@@ -99,6 +99,19 @@ async def _openai_parse_stream_impl(
             obj: dict[str, Any] = json.loads(data)
         except json.JSONDecodeError:
             continue
+
+        usage = obj.get("usage")
+        if usage and isinstance(usage, dict):
+            cached_tokens = 0
+            details = usage.get("prompt_tokens_details")
+            if isinstance(details, dict):
+                cached_tokens = int(details.get("cached_tokens", 0) or 0)
+            yield UsageStreamEvent(
+                prompt_tokens=int(usage.get("prompt_tokens", 0) or 0),
+                completion_tokens=int(usage.get("completion_tokens", 0) or 0),
+                total_tokens=int(usage.get("total_tokens", 0) or 0),
+                cached_tokens=cached_tokens,
+            )
 
         choices = obj.get("choices")
         if not choices or not isinstance(choices, list) or not choices:
@@ -155,10 +168,10 @@ async def _anthropic_parse_stream_impl(
     response: Any,
 ) -> AsyncIterator[StreamEvent]:
     """Async generator: parse Anthropic SSE response into ``StreamEvent`` objects."""
-    import json
-
     event_type = ""
     tool_accumulators: dict[int, dict[str, str]] = {}  # index -> {id, name, input_json}
+    anthropic_prompt_tokens = 0
+    anthropic_cached_tokens = 0
 
     async for line in response.aiter_lines():
         if line.startswith("event: "):
@@ -176,7 +189,23 @@ async def _anthropic_parse_stream_impl(
         except json.JSONDecodeError:
             continue
 
-        if event_type == "content_block_delta":
+        if event_type == "message_start":
+            msg_obj = obj.get("message", {})
+            u = msg_obj.get("usage", {})
+            if isinstance(u, dict):
+                anthropic_prompt_tokens = int(u.get("input_tokens", 0) or 0)
+                anthropic_cached_tokens = int(u.get("cache_read_input_tokens", 0) or 0)
+        elif event_type == "message_delta":
+            u = obj.get("usage", {})
+            if isinstance(u, dict):
+                comp_tokens = int(u.get("output_tokens", 0) or 0)
+                yield UsageStreamEvent(
+                    prompt_tokens=anthropic_prompt_tokens,
+                    completion_tokens=comp_tokens,
+                    total_tokens=anthropic_prompt_tokens + comp_tokens,
+                    cached_tokens=anthropic_cached_tokens,
+                )
+        elif event_type == "content_block_delta":
             delta = obj.get("delta", {})
             delta_type = delta.get("type")
             if delta_type == "text_delta":
@@ -270,6 +299,7 @@ class OpenAITransport(ProviderTransport):
             "messages": messages,
             "max_tokens": max_tokens,
             "stream": True,
+            "stream_options": {"include_usage": True},
         }
         if tools:
             kwargs["tools"] = tools

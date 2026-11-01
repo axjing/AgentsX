@@ -395,6 +395,7 @@ async def _async_chat(
                 store,
                 sess.id,
                 shown_model,
+                token_stats=harness.token_stats,
             )
             if new_model and new_model != shown_model:
                 try:

@@ -42,6 +42,7 @@ def handle_command(
     store: SessionBackend | None = None,
     session_id: str = "",
     model_name: str = "unknown",
+    token_stats: dict[str, int] | None = None,
 ) -> tuple[str | None, str]:
     """Process a slash command typed by the user.
 
@@ -51,6 +52,7 @@ def handle_command(
         store: SessionStore instance (required for session commands).
         session_id: Current session ID.
         model_name: Current model name (passed to /new for correct session metadata).
+        token_stats: Optional cumulative token statistics.
 
     Returns:
         (new_session_id, new_model_name) or (None, current_model).
@@ -71,11 +73,19 @@ def handle_command(
         return None, model_name
 
     if command in ("/status", "/info"):
-        msg = commands.cmd_status(
-            session_id=session_id,
-            model_name=model_name,
-            messages=messages,
-        )
+        if token_stats is not None:
+            msg = commands.cmd_status(
+                session_id=session_id,
+                model_name=model_name,
+                messages=messages,
+                token_stats=token_stats,
+            )
+        else:
+            msg = commands.cmd_status(
+                session_id=session_id,
+                model_name=model_name,
+                messages=messages,
+            )
         console.print(msg)
         return None, model_name
 

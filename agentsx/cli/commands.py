@@ -399,6 +399,7 @@ def cmd_status(
     model_name: str,
     messages: list[AgentMessage],
     workspace_root: Path | None = None,
+    token_stats: dict[str, int] | None = None,
 ) -> str:
     """Return unified status summary of the session, model, context, and git workspace.
 
@@ -407,6 +408,7 @@ def cmd_status(
         model_name: Current active model name.
         messages: Active conversation messages list.
         workspace_root: Workspace root directory. Defaults to current working directory.
+        token_stats: Optional cumulative token statistics dict.
 
     Returns:
         Formatted multi-line status summary.
@@ -444,10 +446,26 @@ def cmd_status(
         f"  Session ID : {sid_display}",
         f"  Model      : {model_name}",
         f"  Context    : {msg_count} messages (~{approx_tokens} tokens)",
-        f"  Workspace  : {root}",
-        f"  {git_info}",
-        f"  {plan_info}",
     ]
+
+    if token_stats and token_stats.get("total_tokens", 0) > 0:
+        total = token_stats["total_tokens"]
+        prompt = token_stats.get("prompt_tokens", 0)
+        completion = token_stats.get("completion_tokens", 0)
+        cached = token_stats.get("cached_tokens", 0)
+        hit_rate = (cached / prompt * 100) if prompt > 0 else 0.0
+        lines.append(
+            f"  Tokens     : {total} total ({prompt} in, {completion} out) "
+            f"| Cache Hit: {hit_rate:.1f}% ({cached} tokens)"
+        )
+
+    lines.extend(
+        [
+            f"  Workspace  : {root}",
+            f"  {git_info}",
+            f"  {plan_info}",
+        ]
+    )
     return "\n".join(lines)
 
 

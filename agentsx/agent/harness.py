@@ -18,7 +18,7 @@ from agentsx.agent.loop import run_agent_loop
 from agentsx.context.compaction import compact_messages, should_compact
 from agentsx.extensions.api import ExtensionAPI
 from agentsx.protocol.errors import SessionError
-from agentsx.protocol.events import AgentEvent
+from agentsx.protocol.events import AgentEvent, ModelResponseEvent
 from agentsx.protocol.messages import AgentMessage, MessageRole
 from agentsx.provider import Provider
 from agentsx.security.policy import ExecutionPolicy
@@ -86,6 +86,9 @@ class AgentHarness:
         self._listeners: list[EventListener] = []
         self._follow_up_queue: deque[str] = deque()
         self._steer_queue: deque[str] = deque()
+        self._total_prompt_tokens: int = 0
+        self._total_completion_tokens: int = 0
+        self._total_cached_tokens: int = 0
 
         effective_system_prompt = system_prompt or ""
         memory_content = self._load_persistent_memory()
@@ -139,6 +142,16 @@ class AgentHarness:
     def messages(self) -> list[AgentMessage]:
         """Read-only copy of the current message history."""
         return list(self._messages)
+
+    @property
+    def token_stats(self) -> dict[str, int]:
+        """Cumulative token metrics for the current session."""
+        return {
+            "prompt_tokens": self._total_prompt_tokens,
+            "completion_tokens": self._total_completion_tokens,
+            "total_tokens": self._total_prompt_tokens + self._total_completion_tokens,
+            "cached_tokens": self._total_cached_tokens,
+        }
 
     # -- Public API --
 
@@ -293,6 +306,9 @@ class AgentHarness:
             self._messages.append(system)
         self._follow_up_queue.clear()
         self._steer_queue.clear()
+        self._total_prompt_tokens = 0
+        self._total_completion_tokens = 0
+        self._total_cached_tokens = 0
 
     # -- Internals --
 
@@ -315,6 +331,11 @@ class AgentHarness:
             timeout=timeout,
             steer_queue=self._steer_queue,
         ):
+            if isinstance(event, ModelResponseEvent) and event.usage:
+                self._total_prompt_tokens += event.usage.get("prompt_tokens", 0)
+                self._total_completion_tokens += event.usage.get("completion_tokens", 0)
+                self._total_cached_tokens += event.usage.get("cached_tokens", 0)
+
             for listener in self._listeners:
                 try:
                     listener(event)

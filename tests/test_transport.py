@@ -1,11 +1,13 @@
 """Tests for the provider transport abstraction layer."""
 
+import asyncio
 import json
 from collections.abc import AsyncIterator
 
 from agentsx.protocol.events import (
     TextStreamEvent,
     ToolCallStreamEvent,
+    UsageStreamEvent,
 )
 from agentsx.protocol.messages import (
     AgentMessage,
@@ -87,8 +89,6 @@ def test_openai_parse_stream_text_only() -> None:
                 events.append(event)
         return events
 
-    import asyncio
-
     events = asyncio.run(_run())
 
     assert len(events) == 2
@@ -155,8 +155,6 @@ def test_openai_parse_stream_tool_calls() -> None:
                 events.append(event)
         return events
 
-    import asyncio
-
     events = asyncio.run(_run())
 
     assert len(events) == 1
@@ -189,8 +187,6 @@ def test_anthropic_parse_stream_text_only() -> None:
                 events.append(event)
         return events
 
-    import asyncio
-
     events = asyncio.run(_run())
 
     assert len(events) == 2
@@ -205,3 +201,77 @@ def test_transport_build_kwargs_anthropic_has_stream() -> None:
         max_tokens=100,
     )
     assert kwargs.get("stream") is True
+
+
+def test_openai_parse_stream_usage() -> None:
+    transport = OpenAITransport()
+    chunks = [
+        json.dumps(
+            {
+                "choices": [{"delta": {"content": "Hi"}}],
+            }
+        ),
+        json.dumps(
+            {
+                "choices": [],
+                "usage": {
+                    "prompt_tokens": 120,
+                    "completion_tokens": 15,
+                    "total_tokens": 135,
+                    "prompt_tokens_details": {"cached_tokens": 64},
+                },
+            }
+        ),
+        "[DONE]",
+    ]
+    response = _MockSSELines([f"data: {c}" for c in chunks])
+
+    async def _run() -> list[UsageStreamEvent]:
+        events: list[UsageStreamEvent] = []
+        async for event in transport.parse_stream(response):
+            if isinstance(event, UsageStreamEvent):
+                events.append(event)
+        return events
+
+    events = asyncio.run(_run())
+    assert len(events) == 1
+    assert events[0].prompt_tokens == 120
+    assert events[0].completion_tokens == 15
+    assert events[0].cached_tokens == 64
+
+
+def test_anthropic_parse_stream_usage() -> None:
+    transport = AnthropicTransport()
+    start_payload = {
+        "type": "message_start",
+        "message": {
+            "usage": {"input_tokens": 200, "cache_read_input_tokens": 150},
+        },
+    }
+    delta_payload = {"type": "message_delta", "usage": {"output_tokens": 25}}
+    raw_lines = [
+        "event: message_start",
+        f"data: {json.dumps(start_payload)}",
+        "",
+        "event: content_block_delta",
+        f"data: {json.dumps({'delta': {'type': 'text_delta', 'text': 'Done'}})}",
+        "",
+        "event: message_delta",
+        f"data: {json.dumps(delta_payload)}",
+        "",
+    ]
+    response = _MockSSELines(raw_lines)
+
+    async def _run() -> list[UsageStreamEvent]:
+        events: list[UsageStreamEvent] = []
+        async for event in transport.parse_stream(response):
+            if isinstance(event, UsageStreamEvent):
+                events.append(event)
+        return events
+
+    events = asyncio.run(_run())
+    assert len(events) == 1
+    assert events[0].prompt_tokens == 200
+    assert events[0].completion_tokens == 25
+    assert events[0].total_tokens == 225
+    assert events[0].cached_tokens == 150
