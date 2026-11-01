@@ -43,6 +43,7 @@ async def spawn_agent(
     prompt: str = "",
     system_prompt: str = "",
     role: str = "leaf",
+    workdir: str = "",
     max_steps: int = 10,
     timeout: int = 120,
     max_spawn_depth: int = 2,
@@ -62,6 +63,7 @@ async def spawn_agent(
         prompt: The detailed task prompt for the sub-agent.
         system_prompt: Optional system prompt for the sub-agent.
         role: Sub-agent role: ``leaf`` or ``orchestrator``.
+        workdir: Confined working directory path (empty = unrestricted).
         max_steps: Max tool-calling iterations (default 10).
         timeout: Max wall-clock seconds (default 120).
         max_spawn_depth: Maximum depth for recursive spawning (default 2).
@@ -96,6 +98,7 @@ async def spawn_agent(
     config = SubAgentConfig(
         model_name=resolved_model,
         system_prompt=system_prompt,
+        workdir=workdir,
         max_steps=max_steps,
         timeout=timeout,
         role=resolved_role,

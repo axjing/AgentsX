@@ -14,6 +14,7 @@ Tool blocking prevents dangerous operations in child agents.
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 from uuid import uuid4
 
 from agentsx.agent.loop import run_agent_loop
@@ -92,6 +93,9 @@ class SubAgentConfig:
     system_prompt: str = ""
     """Optional system prompt.  Empty = no system message."""
 
+    workdir: str = ""
+    """Optional working directory path to confine sub-agent filesystem access."""
+
     max_steps: int = 10
     """Maximum tool-calling iterations."""
 
@@ -143,12 +147,26 @@ class SubAgentRuntime:
             blocked=config.blocked_tools,
             role=config.role,
         )
+        allowed_dirs = [Path(config.workdir)] if config.workdir else None
+        self._policy: ExecutionPolicy = ExecutionPolicy.default(
+            allowed_dirs=allowed_dirs
+        )
         self._messages: list[AgentMessage] = []
         self._spawn_depth = spawn_depth
 
-        if config.system_prompt:
+        system_prompt = config.system_prompt
+        if config.workdir:
+            workdir_note = (
+                f"Working directory confinement: {config.workdir}. "
+                "All file operations outside this directory are strictly forbidden."
+            )
+            system_prompt = (
+                f"{system_prompt}\n\n{workdir_note}" if system_prompt else workdir_note
+            )
+
+        if system_prompt:
             self._messages.append(
-                AgentMessage(role=MessageRole.SYSTEM, content=config.system_prompt),
+                AgentMessage(role=MessageRole.SYSTEM, content=system_prompt),
             )
 
     @property
@@ -175,6 +193,16 @@ class SubAgentRuntime:
     def role(self) -> SubAgentRole:
         """The sub-agent's role."""
         return self._config.role
+
+    @property
+    def workdir(self) -> str:
+        """Confined working directory, or empty if unrestricted."""
+        return self._config.workdir
+
+    @property
+    def policy(self) -> ExecutionPolicy:
+        """The execution policy enforcing sub-agent security constraints."""
+        return self._policy
 
     async def run(self, prompt: str) -> str:
         """Run the sub-agent on *prompt* and return the final response.
@@ -203,7 +231,7 @@ class SubAgentRuntime:
             messages=self._messages,
             max_steps=self._config.max_steps,
             tools=self._tools,
-            policy=ExecutionPolicy.default(),
+            policy=self._policy,
         ):
             yield event
 

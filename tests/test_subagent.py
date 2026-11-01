@@ -5,6 +5,7 @@ and orchestrator (``agentsx/orchestrator.py``).
 import asyncio
 import time
 from collections.abc import AsyncIterator, Generator
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -17,7 +18,7 @@ from agentsx.agent.subagent import (
 )
 from agentsx.orchestrator import Orchestrator, SubAgentRecord
 from agentsx.protocol.events import StreamEvent, TextStreamEvent
-from agentsx.protocol.messages import AgentMessage, MessageRole
+from agentsx.protocol.messages import AgentMessage, Decision, MessageRole
 from agentsx.provider import Model, Provider
 from agentsx.tools.builtin.orchestration.subagent import spawn_agent
 
@@ -29,6 +30,7 @@ class TestSubAgentConfig:
         cfg = SubAgentConfig(model_name="gpt-4o")
         assert cfg.model_name == "gpt-4o"
         assert cfg.system_prompt == ""
+        assert cfg.workdir == ""
         assert cfg.max_steps == 10
         assert cfg.allowed_tools is None
         assert cfg.timeout == 120
@@ -38,6 +40,7 @@ class TestSubAgentConfig:
         cfg = SubAgentConfig(
             model_name="claude-sonnet-4",
             system_prompt="Be concise.",
+            workdir="/tmp/sandbox",
             max_steps=5,
             allowed_tools=["tool_file_read"],
             timeout=30,
@@ -45,6 +48,7 @@ class TestSubAgentConfig:
         )
         assert cfg.model_name == "claude-sonnet-4"
         assert cfg.system_prompt == "Be concise."
+        assert cfg.workdir == "/tmp/sandbox"
         assert cfg.max_steps == 5
         assert cfg.allowed_tools == ["tool_file_read"]
         assert cfg.timeout == 30
@@ -151,6 +155,43 @@ class TestSubAgentRuntime:
         config = SubAgentConfig(model_name="gpt-4o")
         runtime = SubAgentRuntime(config, spawn_depth=1)
         assert runtime.spawn_depth == 1
+
+    def test_workdir_confinement_policy(self, tmp_path: Path) -> None:
+        sandbox = tmp_path / "sandbox"
+        sandbox.mkdir()
+        allowed_file = sandbox / "allowed.txt"
+        allowed_file.write_text("hello", encoding="utf-8")
+
+        outside_file = tmp_path / "outside.txt"
+        outside_file.write_text("secret", encoding="utf-8")
+
+        config = SubAgentConfig(model_name="gpt-4o", workdir=str(sandbox))
+        runtime = SubAgentRuntime(config)
+
+        assert runtime.workdir == str(sandbox)
+        # Inside sandbox should be allowed
+        assert (
+            runtime.policy.evaluate("tool_file_read", {"path": str(allowed_file)})
+            == Decision.ALLOW
+        )
+        # Outside sandbox should be forbidden by PathGuard
+        assert (
+            runtime.policy.evaluate("tool_file_read", {"path": str(outside_file)})
+            == Decision.FORBIDDEN
+        )
+
+    def test_system_prompt_includes_workdir_confinement(self, tmp_path: Path) -> None:
+        config = SubAgentConfig(
+            model_name="gpt-4o",
+            system_prompt="Base prompt.",
+            workdir=str(tmp_path),
+        )
+        runtime = SubAgentRuntime(config)
+        assert len(runtime.messages) == 1
+        assert "Base prompt." in runtime.messages[0].content
+        assert (
+            f"Working directory confinement: {tmp_path}" in runtime.messages[0].content
+        )
 
 
 class TestOrchestrator:
@@ -314,3 +355,20 @@ class TestSpawnAgentTool:
             assert not res.is_error
             config_arg = mock_orc.spawn.call_args[0][0]
             assert config_arg.role == SubAgentRole.LEAF
+
+    @pytest.mark.asyncio
+    async def test_spawn_agent_with_workdir(self, tmp_path: Path) -> None:
+        with patch(
+            "agentsx.tools.builtin.orchestration.subagent._get_orchestra"
+        ) as mock_get:
+            mock_orc = AsyncMock()
+            mock_orc.spawn = AsyncMock(return_value="Isolated output")
+            mock_get.return_value = mock_orc
+
+            res = await spawn_agent.call(
+                prompt="Task in sandbox",
+                workdir=str(tmp_path),
+            )
+            assert not res.is_error
+            config_arg = mock_orc.spawn.call_args[0][0]
+            assert config_arg.workdir == str(tmp_path)
