@@ -42,6 +42,7 @@ from agentsx.session import create_session_store
 from agentsx.tools import ToolRegistry
 from agentsx.tools.builtin import ALL_TOOLS
 from agentsx.tools.builtin.mcp import load_mcp_configs, register_mcp_servers
+from agentsx.tools.builtin.orchestration.skills import discover_skills
 
 console = Console()
 logger = logging.getLogger(__name__)
@@ -200,6 +201,7 @@ async def _async_run(
         mcp_configs = load_mcp_configs()
         if mcp_configs:
             await register_mcp_servers(registry, mcp_configs)
+        discover_skills(registry)
 
     steps = max_steps or settings.max_steps
 
@@ -324,6 +326,7 @@ async def _async_chat(
         )
         if mcp_configs:
             await register_mcp_servers(registry, mcp_configs)
+        discover_skills(registry, Path(workspace).resolve() if workspace else None)
 
     steps = max_steps or settings.max_steps
 

@@ -18,6 +18,7 @@ from agentsx.tools.builtin.exec.shell import tool_bash
 from agentsx.tools.builtin.mcp.mcp_client import tool_mcp_call
 from agentsx.tools.builtin.orchestration.memory import tool_remember
 from agentsx.tools.builtin.orchestration.planner import tool_plan
+from agentsx.tools.builtin.orchestration.skills import tool_create_skill
 from agentsx.tools.builtin.orchestration.subagent import spawn_agent
 from agentsx.tools.builtin.read.filesystem import (
     tool_file_glob,
@@ -42,6 +43,7 @@ ALL_TOOLS = [
     spawn_agent,
     tool_plan,
     tool_remember,
+    tool_create_skill,
     tool_mcp_call,
 ]
 
@@ -56,6 +58,7 @@ __all__ = [
     "spawn_agent",
     "tool_plan",
     "tool_remember",
+    "tool_create_skill",
     "tool_web_fetch",
     "tool_web_search",
     "tool_mcp_call",

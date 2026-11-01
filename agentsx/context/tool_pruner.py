@@ -133,6 +133,13 @@ def _summarize_mcp_call(args: dict[str, object], content: str) -> str:
     return f"[mcp:{server}] {tool_name} -> {content_len:,} chars"
 
 
+def _summarize_create_skill(args: dict[str, object], content: str) -> str:
+    """Summarize a dynamic skill creation tool call."""
+    name = str(args.get("name", "?"))
+    first_line = content.strip().splitlines()[0] if content.strip() else "ok"
+    return f"[skill:create] '{name}' -> {first_line}"
+
+
 # Tool name -> summarizer function mapping.
 _SUMMARIZERS: dict[str, Callable[[dict[str, object], str], str]] = {
     "tool_bash": _summarize_bash,
@@ -146,6 +153,7 @@ _SUMMARIZERS: dict[str, Callable[[dict[str, object], str], str]] = {
     "spawn_agent": _summarize_spawn_agent,
     "tool_plan": _summarize_plan,
     "tool_remember": _summarize_remember,
+    "tool_create_skill": _summarize_create_skill,
     "tool_mcp_call": _summarize_mcp_call,
 }
 

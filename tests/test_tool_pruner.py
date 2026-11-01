@@ -3,6 +3,7 @@
 from agentsx.context.tool_pruner import (
     _extract_tool_call_info,
     _summarize_bash,
+    _summarize_create_skill,
     _summarize_edit,
     _summarize_glob,
     _summarize_grep,
@@ -133,6 +134,11 @@ class TestToolSummarizers:
         args: dict[str, object] = {"server": "filesystem", "tool": "list_directory"}
         summary = _summarize_mcp_call(args, '["file1.txt", "file2.txt"]')
         assert summary == "[mcp:filesystem] list_directory -> 26 chars"
+
+    def test_summarize_create_skill(self) -> None:
+        args: dict[str, object] = {"name": "calc_tax"}
+        summary = _summarize_create_skill(args, "Skill 'calc_tax' registered.")
+        assert summary == "[skill:create] 'calc_tax' -> Skill 'calc_tax' registered."
 
 
 class TestSummarizeToolCall:

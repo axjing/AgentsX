@@ -122,6 +122,10 @@ class ToolSpec:
                 error=exc,
             )
 
+    def __call__(self, *args: object, **kwargs: object) -> Any:
+        """Forward direct invocation to the underlying callable."""
+        return self.fn(*args, **kwargs)
+
 
 class ToolRegistry:
     """Manages a collection of ToolSpecs with toolset support.
@@ -182,6 +186,10 @@ class ToolRegistry:
     def get(self, name: str) -> ToolSpec | None:
         """Look up a tool by name."""
         return self._tools.get(name)
+
+    def __contains__(self, name: str) -> bool:
+        """Check if a tool exists in the registry."""
+        return name in self._tools
 
     async def call(self, name: str, **kwargs: object) -> ToolResult:
         """Look up and call a tool by name, returning a ToolResult."""

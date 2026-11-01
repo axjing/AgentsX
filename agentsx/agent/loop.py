@@ -29,6 +29,8 @@ from collections import deque
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import TypeAlias
 
+from agentsx.agent.crystallizer import AutonomousCrystallizer
+from agentsx.agent.verifier import ProactiveQualityGate
 from agentsx.agent.watchdog import Watchdog
 from agentsx.config import AgentsXSettings, get_settings
 from agentsx.context.compaction import (
@@ -332,6 +334,8 @@ async def run_agent_loop(
     step = 0
     loop_start = time.monotonic()
     watchdog = Watchdog()
+    quality_gate = ProactiveQualityGate()
+    crystallizer = AutonomousCrystallizer()
 
     yield AgentStartEvent(model=provider.model.id, step=0)
 
@@ -606,6 +610,47 @@ async def run_agent_loop(
                     tool_call_id=tc.id,
                 ),
             )
+
+            # ── Proactive syntax verification check ───────────────────
+            if tool_result.is_success:
+                check = quality_gate.verify_tool_call(tc.name, tc.arguments)
+                if check is not None and not check.is_valid:
+                    logger.warning(
+                        "Quality gate detected syntax error in %s: %s",
+                        check.path,
+                        check.error_message,
+                    )
+                    messages.append(
+                        AgentMessage(
+                            role=MessageRole.USER,
+                            content=(
+                                f"[Proactive Quality Gate Alert] Syntax error in "
+                                f"'{check.path}': {check.error_message}. "
+                                "Please fix this error before proceeding."
+                            ),
+                        )
+                    )
+
+            # ── Autonomous RSI failure recovery learning ──────────────
+            learned_rule = crystallizer.record_tool_result(
+                tool_name=tc.name,
+                arguments=tc.arguments,
+                result=tool_result,
+            )
+            if learned_rule is not None:
+                logger.info(
+                    "Autonomous RSI crystallized rule: %s",
+                    learned_rule.rule,
+                )
+                messages.append(
+                    AgentMessage(
+                        role=MessageRole.USER,
+                        content=(
+                            f"[Autonomous RSI] Learned rule crystallized to memory: "
+                            f"'{learned_rule.rule}'"
+                        ),
+                    )
+                )
 
             # ── Watchdog loop and failure check ───────────────────────
             warning = watchdog.record_tool_call(
